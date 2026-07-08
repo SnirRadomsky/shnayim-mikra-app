@@ -1,0 +1,51 @@
+name: Mirror to SnirRadomsky
+
+# Keeps https://github.com/SnirRadomsky/shnayim-mikra-app in sync with this repo (SnirR/shnayim-mikra-app).
+on:
+  push:
+    branches:
+      - '**'
+  delete:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-snirradomsky
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    if: github.repository == 'SnirR/shnayim-mikra-app'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Push mirror to SnirRadomsky/shnayim-mikra-app
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MIRROR_TOKEN:-}" ]; then
+            echo "::error::MIRROR_TOKEN repository secret is not set (Personal access token with repo scope for SnirRadomsky/shnayim-mikra-app)."
+            exit 1
+          fi
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${MIRROR_TOKEN}" \
+            https://api.github.com/repos/SnirRadomsky/shnayim-mikra-app)
+          if [ "$STATUS" = "404" ]; then
+            curl -sf -H "Authorization: token ${MIRROR_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d '{"name":"shnayim-mikra-app","private":false,"description":"Mirror of SnirR/shnayim-mikra-app"}' \
+              https://api.github.com/user/repos
+          fi
+          git remote add mirror "https://x-access-token:${MIRROR_TOKEN}@github.com/SnirRadomsky/shnayim-mikra-app.git"
+          git push mirror --all --force
+          git push mirror --tags --force
