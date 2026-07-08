@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <rect width="108" height="108" rx="22" fill="#1d3461"/>
+  <g fill="none" stroke="#fbfbfd" stroke-width="4" stroke-linecap="round">
+    <path d="M54 26 C 42 18, 26 18, 20 24 L 20 78 C 26 72, 42 72, 54 80 C 66 72, 82 72, 88 78 L 88 24 C 82 18, 66 18, 54 26 Z" fill="#fbfbfd" stroke="none"/>
+    <path d="M54 26 L 54 80" stroke="#1d3461" stroke-width="3"/>
+    <path d="M28 36 H 46 M28 46 H 46 M28 56 H 46" stroke="#1d3461" stroke-width="3.5"/>
+    <path d="M62 36 H 80 M62 46 H 80" stroke="#1d3461" stroke-width="3.5"/>
+    <path d="M62 56 H 74" stroke="#8b9cc3" stroke-width="3.5"/>
+  </g>
+  <text x="54" y="100" font-family="serif" font-size="13" fill="#fbfbfd" text-anchor="middle">שמו״ת</text>
+</svg>

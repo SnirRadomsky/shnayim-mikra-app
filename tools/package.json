@@ -1,0 +1,16 @@
+{
+  "name": "shnayim-mikra-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build-data": "node build-data.mjs",
+    "test": "node test-app.mjs"
+  },
+  "dependencies": {
+    "@hebcal/core": "^6.6.0",
+    "@hebcal/leyning": "^9.5.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0"
+  }
+}

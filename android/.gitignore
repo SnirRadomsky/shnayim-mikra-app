@@ -1,0 +1,9 @@
+.gradle/
+.idea/
+build/
+local.properties
+*.iml
+captures/
+.cxx/
+# Web assets are copied at build time from the project root.
+app/src/main/assets/

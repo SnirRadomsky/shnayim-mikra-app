@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d3461">
+<title>שניים מקרא ואחד תרגום</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<!-- ===================== READER ===================== -->
+<div id="app">
+  <header id="topbar">
+    <button id="btnMenu" class="iconbtn" aria-label="תפריט">☰</button>
+    <h1 id="appTitle">שניים מקרא ואחד תרגום</h1>
+    <button id="btnZen" class="iconbtn" aria-label="מסך מלא">⛶</button>
+  </header>
+
+  <nav id="parshaNav" class="navrow navrow-dark">
+    <button class="navarrow" id="parshaPrev" aria-label="הפרשה הקודמת">›</button>
+    <button id="parshaName" class="navpill">—</button>
+    <button class="navarrow" id="parshaNext" aria-label="הפרשה הבאה">‹</button>
+  </nav>
+
+  <nav id="aliyahNav" class="navrow navrow-light">
+    <button class="navarrow" id="aliyahPrev" aria-label="העלייה הקודמת">›</button>
+    <button id="aliyahName" class="navpill navpill-outline">—</button>
+    <button class="navarrow" id="aliyahNext" aria-label="העלייה הבאה">‹</button>
+  </nav>
+
+  <div id="dayBanner" class="banner hidden">
+    <span id="dayBannerText"></span>
+    <button id="dayBannerGo" class="minibtn">עבור</button>
+    <button id="dayBannerClose" class="minibtn ghost">✕</button>
+  </div>
+
+  <div id="readerBar">
+    <span id="progressChip" class="chip">0%</span>
+    <div id="viewFilter" class="seg3">
+      <button data-vf="all" class="on">הכל</button>
+      <button data-vf="mikra">מקרא</button>
+      <button data-vf="targum">תרגום</button>
+    </div>
+    <button id="btnBookmark" class="iconbtn" title="סימניה">🔖</button>
+  </div>
+
+  <main id="content" tabindex="0"></main>
+
+  <div id="scrollbar" class="bottombar">
+    <div class="scrollctl">
+      <span data-i18n="autoScroll">גלילה אוטומטית:</span>
+      <button id="btnPlay" class="iconbtn playbtn" aria-label="הפעל גלילה">▶</button>
+    </div>
+    <div class="speedctl">
+      <span data-i18n="speed">מהירות:</span>
+      <button id="speedDown" class="stepbtn">−</button>
+      <span id="speedVal">55</span>
+      <button id="speedUp" class="stepbtn">+</button>
+    </div>
+  </div>
+
+  <button id="zenExit" class="hidden" aria-label="יציאה ממסך מלא">✕</button>
+</div>
+
+<!-- ===================== SIDE MENU ===================== -->
+<div id="menuOverlay" class="overlay hidden"></div>
+<aside id="sideMenu" class="hidden">
+  <div class="menuhead">שניים מקרא ואחד תרגום</div>
+  <button class="menuitem" id="miToday">📖 <span data-i18n="menuToday">לפרשת השבוע</span></button>
+  <button class="menuitem" id="miProgress">✅ <span data-i18n="menuProgress">התקדמות</span></button>
+  <button class="menuitem" id="miBookmarkGo">🔖 <span data-i18n="menuBookmark">עבור לסימניה</span></button>
+  <button class="menuitem" id="miFontUp">🔍 <span data-i18n="menuFontUp">הגדל כתב</span></button>
+  <button class="menuitem" id="miFontDown">🔎 <span data-i18n="menuFontDown">הקטן כתב</span></button>
+  <button class="menuitem" id="miSettings">⚙️ <span data-i18n="menuSettings">הגדרות</span></button>
+  <button class="menuitem" id="miAbout">ℹ️ <span data-i18n="menuAbout">אודות</span></button>
+</aside>
+
+<!-- ===================== SETTINGS ===================== -->
+<section id="settingsPage" class="page hidden">
+  <header class="pagehead">
+    <button class="iconbtn pageback" data-close="settingsPage">←</button>
+    <h2 data-i18n="settings">הגדרות</h2>
+  </header>
+  <div class="pagebody" id="settingsBody">
+
+    <div class="setgroup">
+      <h3 data-i18n="targum">תרגום</h3>
+      <label class="setrow"><span data-i18n="onkelos">אונקולוס</span><input type="checkbox" id="setOnkelos" class="tgl"></label>
+      <label class="setrow"><span data-i18n="rashi">רש"י</span><input type="checkbox" id="setRashi" class="tgl"></label>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="fontSize">גודל הכתב</h3>
+      <div class="stepper">
+        <button id="fontDown" class="stepbtn">−</button>
+        <span id="fontVal">54</span>
+        <button id="fontUp" class="stepbtn">+</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="scrollSpeed">מהירות גלילה</h3>
+      <div class="stepper">
+        <button id="speedDown2" class="stepbtn">−</button>
+        <span id="speedVal2">55</span>
+        <button id="speedUp2" class="stepbtn">+</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="readBy">קריאה לפי</h3>
+      <div class="seg2" id="segMode">
+        <button data-val="pasuk" data-i18n="byVerse">פסוק פסוק</button>
+        <button data-val="aliyah" data-i18n="byAliyah">עליות</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="teamim">טעמים</h3>
+      <div class="seg2" id="segTeamim">
+        <button data-val="with" data-i18n="with">עם</button>
+        <button data-val="without" data-i18n="without">בלי</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="haftara">הפטרה</h3>
+      <div class="seg2" id="segHaftara">
+        <button data-val="with" data-i18n="with">עם</button>
+        <button data-val="without" data-i18n="without">בלי</button>
+      </div>
+      <div class="subrow" id="haftaraMinhagRow">
+        <span data-i18n="minhag">מנהג:</span>
+        <div class="seg2" id="segMinhag">
+          <button data-val="ashk" data-i18n="ashkenaz">אשכנז</button>
+          <button data-val="seph" data-i18n="sephard">ספרד</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="showVerse">הצג פסוק</h3>
+      <div class="seg2" id="segTwice">
+        <button data-val="once" data-i18n="once">פעם אחת</button>
+        <button data-val="twice" data-i18n="twice">פעמיים</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="language">שפה</h3>
+      <div class="seg2" id="segLang">
+        <button data-val="he">עברית</button>
+        <button data-val="en">English</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="specialColors">צבעים מיוחדים</h3>
+      <div class="colorrow">
+        <span data-i18n="onkelosC">אונקולוס:</span>
+        <span class="colorsample targum-sample" id="sampleOnkelos">בְּקַדְמִין בְּרָא</span>
+        <input type="color" id="colOnkelos" class="colorpick" title="שנה צבע">
+      </div>
+      <div class="colorrow">
+        <span data-i18n="rashiC">רש"י:</span>
+        <span class="colorsample rashi-sample" id="sampleRashi">בראשית ברא</span>
+        <input type="color" id="colRashi" class="colorpick" title="שנה צבע">
+      </div>
+      <div class="colorrow">
+        <span data-i18n="mikraC">מקרא:</span>
+        <span class="colorsample mikra-sample" id="sampleMikra">בְּרֵאשִׁ֖ית</span>
+        <input type="color" id="colMikra" class="colorpick" title="שנה צבע">
+      </div>
+      <button id="btnResetColors" class="outlinebtn" data-i18n="origColors">צבעים מקוריים</button>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="theme">ערכת נושא</h3>
+      <div class="seg3w" id="segTheme">
+        <button data-val="light" data-i18n="light">בהיר</button>
+        <button data-val="dark" data-i18n="dark">כהה</button>
+        <button data-val="sepia" data-i18n="sepia">ספיה</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="location">מיקום</h3>
+      <div class="seg2" id="segLoc">
+        <button data-val="il" data-i18n="israel">ישראל</button>
+        <button data-val="d" data-i18n="abroad">מחוץ לישראל</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="notifications">התראות</h3>
+      <button id="btnNotifPerm" class="bluebtn" data-i18n="notifPerm">לשינוי הרשאות התראות</button>
+      <label class="setrow"><span data-i18n="weeklyReminder">תזכורת שבועית</span><input type="checkbox" id="setReminder" class="tgl"></label>
+      <div class="subrow" id="reminderRow">
+        <select id="remDay">
+          <option value="4" data-i18n="thursday">יום חמישי</option>
+          <option value="5" data-i18n="friday">יום שישי</option>
+          <option value="0" data-i18n="sunday">יום ראשון</option>
+          <option value="1" data-i18n="monday">יום שני</option>
+          <option value="2" data-i18n="tuesday">יום שלישי</option>
+          <option value="3" data-i18n="wednesday">יום רביעי</option>
+        </select>
+        <input type="time" id="remTime" value="20:00">
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="font">גופן</h3>
+      <label class="radiorow"><input type="radio" name="font" value="frank"><span style="font-family:FrankRuehl">פרנק-רוהל — בְּרֵאשִׁ֖ית בָּרָ֣א</span></label>
+      <label class="radiorow"><input type="radio" name="font" value="keter"><span style="font-family:KeterYG">כתר — בְּרֵאשִׁ֖ית בָּרָ֣א</span></label>
+      <label class="radiorow"><input type="radio" name="font" value="ezra"><span style="font-family:EzraSIL">עזרא — בְּרֵאשִׁ֖ית בָּרָ֣א</span></label>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="autoScrollBar">הצג שורת גלילה אוטומטית</h3>
+      <div class="seg2" id="segScrollbar">
+        <button data-val="yes" data-i18n="yes">כן</button>
+        <button data-val="no" data-i18n="no">לא</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="resetAfterShabbat">אפס מיקום שמור אחרי שבת</h3>
+      <div class="seg2" id="segAutoAdvance">
+        <button data-val="yes" data-i18n="yes">כן</button>
+        <button data-val="no" data-i18n="no">לא</button>
+      </div>
+      <p class="hint" data-i18n="resetHint">במוצאי שבת האפליקציה תעבור אוטומטית לפרשה של השבוע החדש.</p>
+    </div>
+
+    <div class="setgroup">
+      <h3 data-i18n="smart">חכם</h3>
+      <label class="setrow"><span data-i18n="dailyPlan">לוח קריאה יומי (עלייה ליום)</span><input type="checkbox" id="setDailyPlan" class="tgl"></label>
+      <label class="setrow"><span data-i18n="keepAwake">השאר מסך דולק בזמן קריאה</span><input type="checkbox" id="setKeepAwake" class="tgl"></label>
+      <label class="setrow"><span data-i18n="autoMark">סמן עלייה כהושלמה אוטומטית בסוף גלילה</span><input type="checkbox" id="setAutoMark" class="tgl"></label>
+    </div>
+
+  </div>
+</section>
+
+<!-- ===================== PROGRESS ===================== -->
+<section id="progressPage" class="page hidden">
+  <header class="pagehead">
+    <button class="iconbtn pageback" data-close="progressPage">←</button>
+    <h2 data-i18n="progress">התקדמות</h2>
+  </header>
+  <div class="pagebody" id="progressBody"></div>
+</section>
+
+<!-- ===================== PARSHA PICKER ===================== -->
+<div id="pickerModal" class="modal hidden">
+  <div class="modalbox">
+    <h3 data-i18n="chooseParsha">בחר פרשה</h3>
+    <div id="pickerList"></div>
+    <button class="outlinebtn" data-close="pickerModal" data-i18n="close">סגור</button>
+  </div>
+</div>
+
+<!-- ===================== ABOUT ===================== -->
+<div id="aboutModal" class="modal hidden">
+  <div class="modalbox">
+    <h3 data-i18n="menuAbout">אודות</h3>
+    <div id="aboutBody" class="aboutbody"></div>
+    <button class="outlinebtn" data-close="aboutModal" data-i18n="close">סגור</button>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- open sefer (book) -->
+    <path
+        android:fillColor="#FBFBFD"
+        android:pathData="M54,34 C46,28 34,28 29,32 L29,72 C34,68 46,68 54,74 C62,68 74,68 79,72 L79,32 C74,28 62,28 54,34 Z"/>
+    <path
+        android:strokeColor="#1D3461"
+        android:strokeWidth="2.5"
+        android:pathData="M54,34 L54,74"/>
+    <path
+        android:strokeColor="#1D3461"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M35,42 L48,42 M35,50 L48,50 M35,58 L48,58"/>
+    <path
+        android:strokeColor="#1D3461"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M60,42 L73,42 M60,50 L73,50"/>
+    <path
+        android:strokeColor="#8B9CC3"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M60,58 L68,58"/>
+</vector>
