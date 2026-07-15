@@ -19,15 +19,15 @@
   </header>
 
   <nav id="parshaNav" class="navrow navrow-dark">
-    <button class="navarrow" id="parshaPrev" aria-label="הפרשה הקודמת">›</button>
+    <button class="navarrow" id="parshaPrev" aria-label="הפרשה הקודמת">‹</button>
     <button id="parshaName" class="navpill">—</button>
-    <button class="navarrow" id="parshaNext" aria-label="הפרשה הבאה">‹</button>
+    <button class="navarrow" id="parshaNext" aria-label="הפרשה הבאה">›</button>
   </nav>
 
   <nav id="aliyahNav" class="navrow navrow-light">
-    <button class="navarrow" id="aliyahPrev" aria-label="העלייה הקודמת">›</button>
+    <button class="navarrow" id="aliyahPrev" aria-label="העלייה הקודמת">‹</button>
     <button id="aliyahName" class="navpill navpill-outline">—</button>
-    <button class="navarrow" id="aliyahNext" aria-label="העלייה הבאה">‹</button>
+    <button class="navarrow" id="aliyahNext" aria-label="העלייה הבאה">›</button>
   </nav>
 
   <div id="dayBanner" class="banner hidden">
@@ -37,7 +37,7 @@
   </div>
 
   <div id="readerBar">
-    <span id="progressChip" class="chip">0%</span>
+    <div id="progressChip" class="progressbar" title="התקדמות בפרשה"><div id="progressFill" class="progressfill"></div></div>
     <div id="viewFilter" class="seg3">
       <button data-vf="all" class="on">הכל</button>
       <button data-vf="mikra">מקרא</button>
@@ -59,6 +59,12 @@
       <span id="speedVal">55</span>
       <button id="speedUp" class="stepbtn">+</button>
     </div>
+    <div class="fontctl">
+      <span data-i18n="fontSize">גודל הכתב</span>
+      <button id="fontDownMain" class="stepbtn">−</button>
+      <span id="fontValMain">54</span>
+      <button id="fontUpMain" class="stepbtn">+</button>
+    </div>
   </div>
 
   <button id="zenExit" class="hidden" aria-label="יציאה ממסך מלא">✕</button>
@@ -73,6 +79,7 @@
   <button class="menuitem" id="miBookmarkGo">🔖 <span data-i18n="menuBookmark">עבור לסימניה</span></button>
   <button class="menuitem" id="miFontUp">🔍 <span data-i18n="menuFontUp">הגדל כתב</span></button>
   <button class="menuitem" id="miFontDown">🔎 <span data-i18n="menuFontDown">הקטן כתב</span></button>
+  <button class="menuitem" id="miTeamim">🎵 <span data-i18n="menuTeamim">שמות הטעמים</span></button>
   <button class="menuitem" id="miSettings">⚙️ <span data-i18n="menuSettings">הגדרות</span></button>
   <button class="menuitem" id="miAbout">ℹ️ <span data-i18n="menuAbout">אודות</span></button>
 </aside>
@@ -141,6 +148,14 @@
     </div>
 
     <div class="setgroup">
+      <h3 data-i18n="targumBg">רקע לתרגום</h3>
+      <div class="seg2" id="segTargumBg">
+        <button data-val="yes" data-i18n="yes">כן</button>
+        <button data-val="no" data-i18n="no">לא</button>
+      </div>
+    </div>
+
+    <div class="setgroup">
       <h3 data-i18n="showVerse">הצג פסוק</h3>
       <div class="seg2" id="segTwice">
         <button data-val="once" data-i18n="once">פעם אחת</button>
@@ -172,6 +187,11 @@
         <span data-i18n="mikraC">מקרא:</span>
         <span class="colorsample mikra-sample" id="sampleMikra">בְּרֵאשִׁ֖ית</span>
         <input type="color" id="colMikra" class="colorpick" title="שנה צבע">
+      </div>
+      <div class="colorrow">
+        <span data-i18n="mikra2C">מקרא (פעם ב׳):</span>
+        <span class="colorsample mikra2-sample" id="sampleMikra2">בְּרֵאשִׁ֖ית</span>
+        <input type="color" id="colMikra2" class="colorpick" title="שנה צבע">
       </div>
       <button id="btnResetColors" class="outlinebtn" data-i18n="origColors">צבעים מקוריים</button>
     </div>
@@ -259,6 +279,24 @@
     <h3 data-i18n="chooseParsha">בחר פרשה</h3>
     <div id="pickerList"></div>
     <button class="outlinebtn" data-close="pickerModal" data-i18n="close">סגור</button>
+  </div>
+</div>
+
+<!-- ===================== BOOKMARKS ===================== -->
+<div id="bookmarksModal" class="modal hidden">
+  <div class="modalbox">
+    <h3 data-i18n="menuBookmark">עבור לסימניה</h3>
+    <div id="bookmarksList"></div>
+    <button class="outlinebtn" data-close="bookmarksModal" data-i18n="close">סגור</button>
+  </div>
+</div>
+
+<!-- ===================== TE'AMIM NAMES ===================== -->
+<div id="teamimModal" class="modal hidden">
+  <div class="modalbox">
+    <h3 data-i18n="menuTeamim">שמות הטעמים</h3>
+    <div id="teamimBody" class="aboutbody"></div>
+    <button class="outlinebtn" data-close="teamimModal" data-i18n="close">סגור</button>
   </div>
 </div>
 

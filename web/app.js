@@ -53,6 +53,10 @@ const STR = {
     loading: 'טוען…', movedToWeek: 'עברנו לפרשת השבוע: {parsha}',
     reminderSet: 'התזכורת נקבעה', reminderOff: 'התזכורת בוטלה',
     endOfAliyah: 'סוף עלייה', notifNA: 'התראות זמינות רק באפליקציה',
+    targumBg: 'רקע לתרגום', mikra2C: 'מקרא (פעם ב\'):', menuTeamim: 'שמות הטעמים',
+    lastVerseRepeat: 'חזרת הפסוק האחרון', bookmarkAdded: 'הסימניה נוספה',
+    bookmarkRemoved: 'הסימניה הוסרה', noBookmarks: 'אין סימניות שמורות',
+    bookmarkDelete: 'הסר', bookmarkAt: 'פרק {c} פסוק {v}',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -89,16 +93,21 @@ const STR = {
     loading: 'Loading…', movedToWeek: 'Moved to this week\'s parashah: {parsha}',
     reminderSet: 'Reminder set', reminderOff: 'Reminder cancelled',
     endOfAliyah: 'End of aliyah', notifNA: 'Notifications are available only in the app',
+    targumBg: 'Targum background', mikra2C: 'Mikra (2nd time):', menuTeamim: "Te'amim names",
+    lastVerseRepeat: 'Repeat of the last verse', bookmarkAdded: 'Bookmark added',
+    bookmarkRemoved: 'Bookmark removed', noBookmarks: 'No saved bookmarks',
+    bookmarkDelete: 'Remove', bookmarkAt: 'Chapter {c} verse {v}',
   },
 };
 
 const DEFAULTS = {
   onkelos: true, rashi: false, fontSize: 54, speed: 55, mode: 'pasuk',
-  teamim: 'with', haftara: 'with', minhag: 'seph', twice: 'twice', lang: 'he',
+  teamim: 'with', haftara: 'without', minhag: 'seph', twice: 'twice', lang: 'he',
   colors: {}, theme: 'light', loc: 'il',
   reminderOn: false, reminderDay: 4, reminderTime: '20:00',
   font: 'frank', scrollbar: 'yes', autoAdvance: 'yes',
   dailyPlan: false, keepAwake: false, autoMark: true, viewFilter: 'all',
+  targumBg: 'yes',
 };
 
 // ---------------------------------------------------------------- state
@@ -108,8 +117,15 @@ let PARSHIYOT = null, SCHEDULE = null, HAFTAROT = null;
 const bookCache = {};
 let pos = loadJSON('sm_pos', null);       // {loc, idx, aliyah, scroll}
 let progress = loadJSON('sm_prog', {});   // "date|key" -> {a:[bool x8]}
-let bookmark = loadJSON('sm_bookmark', null);
+let bookmarks = loadJSON('sm_bookmarks', null);
+if (!bookmarks) {
+  // migrate the old single-bookmark format
+  const old = loadJSON('sm_bookmark', null);
+  bookmarks = old ? [{ loc: old.loc, idx: old.idx, aliyah: old.aliyah, c: 0, v: 0, scroll: old.scroll, ts: 0 }] : [];
+  saveJSON('sm_bookmarks', bookmarks);
+}
 let scrolling = false, scrollRAF = 0, lastTs = 0, scrollRemainder = 0;
+let longPressTimer = null;
 let wakeLock = null;
 let renderSeq = 0;
 
@@ -127,6 +143,23 @@ function savePos() {
   saveJSON('sm_pos', pos);
 }
 function saveProgress() { saveJSON('sm_prog', progress); }
+function saveBookmarks() { saveJSON('sm_bookmarks', bookmarks); }
+function findBookmark(c, v) {
+  return bookmarks.findIndex(b => b.loc === S.loc && b.idx === pos.idx && b.aliyah === pos.aliyah && b.c === c && b.v === v);
+}
+function isVerseBookmarked(c, v) { return findBookmark(c, v) >= 0; }
+function toggleVerseBookmark(c, v) {
+  const i = findBookmark(c, v);
+  if (i >= 0) {
+    bookmarks.splice(i, 1);
+    toast(t('bookmarkRemoved'));
+  } else {
+    bookmarks.push({ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now() });
+    toast(t('bookmarkAdded'));
+  }
+  saveBookmarks();
+  renderReader(true);
+}
 function t(key, vars) {
   let s = (STR[S.lang] && STR[S.lang][key]) || STR.he[key] || key;
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace('{' + k + '}', v);
@@ -230,12 +263,13 @@ function mikraHTML(vd, cls) {
 }
 
 function verseBlockHTML(vd, showMikra, showTargum) {
-  let h = `<div class="verse" data-cv="${vd.c}:${vd.v}">`;
+  const marked = isVerseBookmarked(vd.c, vd.v);
+  let h = `<div class="verse${marked ? ' bookmarked' : ''}" data-cv="${vd.c}:${vd.v}">`;
   h += `<span class="vnum">${gematria(vd.v)}</span>`;
   const parts = [];
   if (showMikra) {
     parts.push(mikraHTML(vd, 'mikra'));
-    if (S.twice === 'twice') parts.push(mikraHTML(vd, 'mikra2'));
+    if (S.twice === 'twice' && showTargum) parts.push(mikraHTML(vd, 'mikra2'));
   }
   if (showTargum && S.onkelos && vd.t) parts.push(`<span class="targum">${esc(vd.t)}</span>`);
   h += parts.join(' &nbsp;');
@@ -254,8 +288,8 @@ function renderAliyahMode(verses, showMikra, showTargum) {
   let h = '';
   const passes = [];
   if (showMikra) {
-    passes.push({ head: S.twice === 'twice' ? t('mikraFirst') : t('mikraOnce'), type: 'm1' });
-    if (S.twice === 'twice') passes.push({ head: t('mikraSecond'), type: 'm2' });
+    passes.push({ head: (S.twice === 'twice' && showTargum) ? t('mikraFirst') : t('mikraOnce'), type: 'm1' });
+    if (S.twice === 'twice' && showTargum) passes.push({ head: t('mikraSecond'), type: 'm2' });
   }
   if (showTargum && S.onkelos) passes.push({ head: t('onkelosSec'), type: 't' });
   if (showTargum && S.rashi) passes.push({ head: t('rashiSec'), type: 'r' });
@@ -268,12 +302,14 @@ function renderAliyahMode(verses, showMikra, showTargum) {
         h += `<div class="chapterhead">${t('chapter')} ${gematria(vd.c, true)}</div>`;
         lastC = vd.c;
       }
+      const marked = isVerseBookmarked(vd.c, vd.v);
+      const cls = 'verse' + (marked ? ' bookmarked' : '');
       if (pass.type === 'm1' || pass.type === 'm2') {
-        h += `<div class="verse"><span class="vnum">${gematria(vd.v)}</span>${mikraHTML(vd, pass.type === 'm1' ? 'mikra' : 'mikra2')}</div>`;
+        h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}"><span class="vnum">${gematria(vd.v)}</span>${mikraHTML(vd, pass.type === 'm1' ? 'mikra' : 'mikra2')}</div>`;
       } else if (pass.type === 't') {
-        if (vd.t) h += `<div class="verse"><span class="vnum">${gematria(vd.v)}</span><span class="targum">${esc(vd.t)}</span></div>`;
+        if (vd.t) h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}"><span class="vnum">${gematria(vd.v)}</span><span class="targum">${esc(vd.t)}</span></div>`;
       } else {
-        h += `<div class="verse"><span class="vnum">${gematria(vd.v)}</span></div><div class="rashi">${vd.r.map(sanitizeRashi).join('<br>')}</div>`;
+        h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}"><span class="vnum">${gematria(vd.v)}</span></div><div class="rashi">${vd.r.map(sanitizeRashi).join('<br>')}</div>`;
       }
     }
   }
@@ -331,6 +367,12 @@ async function renderReader(keepScroll) {
         html += verseBlockHTML(vd, showMikra, showTargum);
       }
     }
+    // custom: repeat the mikra of the parsha's very last verse (end of the 7th aliyah)
+    if (pos.aliyah === 6 && showMikra && verses.length) {
+      const lastVd = verses[verses.length - 1];
+      html += `<div class="sectionhead">${t('lastVerseRepeat')}</div>`;
+      html += `<div class="verse">${mikraHTML(lastVd, 'mikra')} &nbsp;${mikraHTML(lastVd, 'mikra2')}</div>`;
+    }
   }
 
   // end-of-aliyah button
@@ -352,7 +394,7 @@ function updateProgressChip() {
   const n = aliyahCount();
   let done = 0;
   for (let i = 0; i < n; i++) if (p.a[i]) done++;
-  $('progressChip').textContent = Math.round(done / n * 100) + '%';
+  $('progressFill').style.width = Math.round(done / n * 100) + '%';
 }
 
 function updateNavButtons() {
@@ -403,6 +445,19 @@ function onAliyahDone() {
   }
 }
 
+// mark the current aliyah done in-place, without navigating away (used when
+// reaching the end of the page passively — via auto-scroll or manual scroll)
+function markAliyahDoneQuiet() {
+  const p = progOf(entry());
+  if (!p.a[pos.aliyah]) {
+    p.a[pos.aliyah] = true;
+    saveProgress();
+    updateProgressChip();
+    const btn = $('btnAliyahDone');
+    if (btn) { btn.classList.add('done'); btn.textContent = t('aliyahDoneAlready'); }
+  }
+}
+
 // ---------------------------------------------------------------- auto scroll
 function pxPerSec() { return 6 + S.speed * 1.8; }
 function startAutoScroll() {
@@ -422,7 +477,7 @@ function startAutoScroll() {
         scrollRemainder -= px;
         if (c.scrollTop + c.clientHeight >= c.scrollHeight - 2) {
           stopAutoScroll();
-          if (S.autoMark) onAliyahDone();
+          if (S.autoMark) markAliyahDoneQuiet();
           return;
         }
       }
@@ -600,19 +655,22 @@ function applyAll() {
   document.documentElement.setAttribute('lang', S.lang);
   document.documentElement.setAttribute('dir', 'rtl'); // app is RTL even in English UI
   $('content').style.fontSize = S.fontSize + 'px';
+  document.body.setAttribute('data-targumbg', S.targumBg);
   const root = document.documentElement.style;
   if (S.colors.targum) root.setProperty('--targum', S.colors.targum); else root.removeProperty('--targum');
   if (S.colors.rashi) root.setProperty('--rashi', S.colors.rashi); else root.removeProperty('--rashi');
   if (S.colors.mikra) { root.setProperty('--mikra', S.colors.mikra); } else root.removeProperty('--mikra');
+  if (S.colors.mikra2) { root.setProperty('--mikra2', S.colors.mikra2); } else root.removeProperty('--mikra2');
   $('scrollbar').classList.toggle('hidden', S.scrollbar !== 'yes');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   $('fontVal').textContent = S.fontSize;
+  $('fontValMain').textContent = S.fontSize;
   $('speedVal').textContent = S.speed;
   $('speedVal2').textContent = S.speed;
   seg($('segMode'), S.mode); seg($('segTeamim'), S.teamim); seg($('segHaftara'), S.haftara);
   seg($('segMinhag'), S.minhag); seg($('segTwice'), S.twice); seg($('segLang'), S.lang);
   seg($('segTheme'), S.theme); seg($('segLoc'), S.loc); seg($('segScrollbar'), S.scrollbar);
-  seg($('segAutoAdvance'), S.autoAdvance);
+  seg($('segAutoAdvance'), S.autoAdvance); seg($('segTargumBg'), S.targumBg);
   $('setOnkelos').checked = S.onkelos;
   $('setRashi').checked = S.rashi;
   $('setDailyPlan').checked = S.dailyPlan;
@@ -628,6 +686,7 @@ function applyAll() {
   $('colOnkelos').value = S.colors.targum || rgbToHex(getVar('--targum')) || '#275079';
   $('colRashi').value = S.colors.rashi || rgbToHex(getVar('--rashi')) || '#6a4a1f';
   $('colMikra').value = S.colors.mikra || rgbToHex(getVar('--mikra')) || '#16161a';
+  $('colMikra2').value = S.colors.mikra2 || rgbToHex(getVar('--mikra2')) || '#3d5a80';
   $('viewFilter').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.vf === S.viewFilter));
   $('viewFilter').querySelector('[data-vf=all]').textContent = t('all');
   $('viewFilter').querySelector('[data-vf=mikra]').textContent = t('mikraOnly');
@@ -671,6 +730,7 @@ function bindSettings() {
   });
   bindSeg('segScrollbar', 'scrollbar', () => applyAll());
   bindSeg('segAutoAdvance', 'autoAdvance', () => {});
+  bindSeg('segTargumBg', 'targumBg', () => applyAll());
   $('setDailyPlan').addEventListener('change', ev => { S.dailyPlan = ev.target.checked; saveSettings(); renderDayBanner(); });
   $('setKeepAwake').addEventListener('change', ev => { S.keepAwake = ev.target.checked; saveSettings(); applyKeepAwake(); });
   $('setAutoMark').addEventListener('change', ev => { S.autoMark = ev.target.checked; saveSettings(); });
@@ -680,6 +740,7 @@ function bindSettings() {
   $('colOnkelos').addEventListener('input', ev => { S.colors.targum = ev.target.value; saveSettings(); applyAll(); });
   $('colRashi').addEventListener('input', ev => { S.colors.rashi = ev.target.value; saveSettings(); applyAll(); });
   $('colMikra').addEventListener('input', ev => { S.colors.mikra = ev.target.value; saveSettings(); applyAll(); });
+  $('colMikra2').addEventListener('input', ev => { S.colors.mikra2 = ev.target.value; saveSettings(); applyAll(); });
   $('btnResetColors').addEventListener('click', () => { S.colors = {}; saveSettings(); applyAll(); });
   $('btnNotifPerm').addEventListener('click', () => {
     const n = native();
@@ -700,6 +761,18 @@ function bindSettings() {
 function openPage(id) { $(id).classList.remove('hidden'); }
 function closeMenu() { $('sideMenu').classList.add('hidden'); $('menuOverlay').classList.add('hidden'); }
 
+function toggleZen() {
+  if (document.body.classList.contains('zen')) {
+    document.body.classList.remove('zen');
+    $('zenExit').classList.add('hidden');
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } else {
+    document.body.classList.add('zen');
+    $('zenExit').classList.remove('hidden');
+    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+  }
+}
+
 function bindUI() {
   $('btnMenu').addEventListener('click', () => {
     $('sideMenu').classList.remove('hidden');
@@ -710,10 +783,9 @@ function bindUI() {
   $('miProgress').addEventListener('click', () => { closeMenu(); renderProgress(); openPage('progressPage'); });
   $('miBookmarkGo').addEventListener('click', () => {
     closeMenu();
-    if (!bookmark || bookmark.loc !== S.loc) { toast(t('noBookmark')); return; }
-    pos.idx = bookmark.idx; pos.aliyah = bookmark.aliyah; pos.scroll = bookmark.scroll; pos.loc = S.loc;
-    savePos();
-    renderReader(true);
+    if (!bookmarks.length) { toast(t('noBookmarks')); return; }
+    renderBookmarksList();
+    openPage('bookmarksModal');
   });
   $('miFontUp').addEventListener('click', () => { S.fontSize = Math.min(120, S.fontSize + 2); saveSettings(); applyAll(); });
   $('miFontDown').addEventListener('click', () => { S.fontSize = Math.max(18, S.fontSize - 2); saveSettings(); applyAll(); });
@@ -743,20 +815,12 @@ function bindUI() {
   $('speedUp').addEventListener('click', () => setSpeed(S.speed + 1));
   $('speedDown').addEventListener('click', () => setSpeed(S.speed - 1));
   $('btnBookmark').addEventListener('click', () => {
-    bookmark = { loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, scroll: $('content').scrollTop };
-    saveJSON('sm_bookmark', bookmark);
-    toast(t('bookmarkSaved'));
+    if (!bookmarks.length) { toast(t('noBookmarks')); return; }
+    renderBookmarksList();
+    openPage('bookmarksModal');
   });
-  $('btnZen').addEventListener('click', () => {
-    document.body.classList.add('zen');
-    $('zenExit').classList.remove('hidden');
-    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
-  });
-  $('zenExit').addEventListener('click', () => {
-    document.body.classList.remove('zen');
-    $('zenExit').classList.add('hidden');
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  });
+  $('btnZen').addEventListener('click', toggleZen);
+  $('zenExit').addEventListener('click', toggleZen);
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     S.viewFilter = b.dataset.vf;
     saveSettings(); applyAll(); renderReader(true);
@@ -770,20 +834,72 @@ function bindUI() {
       savePos();
       const c = $('content');
       if (S.autoMark && !scrolling && c.scrollTop + c.clientHeight >= c.scrollHeight - 4 && c.scrollHeight > c.clientHeight * 1.5) {
-        const p = progOf(entry());
-        if (!p.a[pos.aliyah]) {
-          p.a[pos.aliyah] = true;
-          saveProgress();
-          updateProgressChip();
-          const btn = $('btnAliyahDone');
-          if (btn) { btn.classList.add('done'); btn.textContent = t('aliyahDoneAlready'); }
-        }
+        markAliyahDoneQuiet();
       }
     }, 300);
   });
-  // stop auto-scroll on user touch-drag
-  $('content').addEventListener('touchstart', () => { if (scrolling) stopAutoScroll(); }, { passive: true });
-  $('content').addEventListener('wheel', () => { if (scrolling) stopAutoScroll(); }, { passive: true });
+  // dragging/scrolling the page by hand must NOT cancel auto-scroll; only
+  // system-level interruptions (app backgrounded, notification shade opened) do.
+  document.addEventListener('visibilitychange', () => { if (document.hidden && scrolling) stopAutoScroll(); });
+  // double-tap toggles fullscreen (zen) mode, both entering and exiting
+  $('content').addEventListener('dblclick', ev => { ev.preventDefault(); toggleZen(); });
+  // long-press a verse to mark/unmark a bookmark on it
+  $('content').addEventListener('touchstart', ev => {
+    const v = ev.target.closest('.verse[data-cv]');
+    if (!v) return;
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      const [c, vv] = v.dataset.cv.split(':').map(Number);
+      toggleVerseBookmark(c, vv);
+      if (navigator.vibrate) navigator.vibrate(25);
+    }, 550);
+  }, { passive: true });
+  $('content').addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
+  $('content').addEventListener('touchend', () => clearTimeout(longPressTimer));
+  $('content').addEventListener('touchcancel', () => clearTimeout(longPressTimer));
+  // font-size stepper on the main screen (mirrors the scroll-speed stepper)
+  $('fontUpMain').addEventListener('click', () => { S.fontSize = Math.min(120, S.fontSize + 2); saveSettings(); applyAll(); });
+  $('fontDownMain').addEventListener('click', () => { S.fontSize = Math.max(18, S.fontSize - 2); saveSettings(); applyAll(); });
+  $('miTeamim').addEventListener('click', () => {
+    closeMenu();
+    $('teamimBody').innerHTML = TEAMIM_HTML;
+    openPage('teamimModal');
+  });
+}
+
+function renderBookmarksList() {
+  const list = $('bookmarksList');
+  if (!bookmarks.length) {
+    list.innerHTML = `<p class="hint">${t('noBookmarks')}</p>`;
+    return;
+  }
+  let h = '';
+  bookmarks.forEach((b, i) => {
+    const pm = PARSHIYOT[SCHEDULE[b.loc][b.idx][1]];
+    const aliyahName = (S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN)[b.aliyah];
+    h += `<button class="pickrow" data-i="${i}">
+      <span>${pm.he} · ${aliyahName}${b.c ? ' · ' + t('bookmarkAt', { c: gematria(b.c), v: gematria(b.v) }) : ''}</span>
+      <span class="pd bookmarkdel" data-del="${i}">✕</span></button>`;
+  });
+  list.innerHTML = h;
+  list.querySelectorAll('.pickrow').forEach(r => r.addEventListener('click', ev => {
+    if (ev.target.closest('.bookmarkdel')) return;
+    const b = bookmarks[+r.dataset.i];
+    $('bookmarksModal').classList.add('hidden');
+    S.loc = b.loc; saveSettings();
+    pos.loc = b.loc; pos.idx = b.idx; pos.aliyah = b.aliyah; pos.scroll = b.scroll || 0;
+    savePos();
+    applyAll();
+    renderReader(true);
+  }));
+  list.querySelectorAll('.bookmarkdel').forEach(x => x.addEventListener('click', ev => {
+    ev.stopPropagation();
+    bookmarks.splice(+x.dataset.del, 1);
+    saveBookmarks();
+    renderBookmarksList();
+    renderReader(true);
+  }));
 }
 
 const ABOUT_HTML = `
@@ -797,6 +913,25 @@ const ABOUT_HTML = `
 </ul>
 <p>גופנים: פרנק-רוהל וכתר (Culmus), עזרא (SIL OFL).</p>
 <p>הטקסטים נבדקו אך ייתכנו טעויות — נא לדווח. אין לסמוך על האפליקציה לקריאה בציבור.</p>`;
+
+const TEAMIM_HTML = `
+<p><b>אֵלּוּ שְׁמוֹת הַטְּעָמִים</b> (נוסח כללי):</p>
+<p>קַדְמָא מֻנַּח זַרְקָא מֻנַּח סְגּוֹל,<br>
+מֻנַּח רְבִיעִי מַהְפָּךְ פַּשְׁטָא זָקֵף קָטָן,<br>
+וְזָקֵף גָּדוֹל מֵרְכָא טִפְחָא מֻנַּח אַתְנַחְתָּא,<br>
+פָּזֵר תְּלִישָׁא קְטַנָּה תְּלִישָׁא גְדוֹלָה קַדְמָא וְאַזְלָא,<br>
+אַזְלָא גֵרֵשׁ גֵּרְשַׁיִם דַּרְגָּא תְּבִיר יְתִיב,<br>
+פָּסֵק וְסוֹף פָּסוּק,<br>
+שַׁלְשֶׁלֶת קַרְנֵי פָרָה מֵרְכָא כְפוּלָה יֶרַח בֶּן יוֹמוֹ.</p>
+<p class="hint">(הערה: בחלק מסידורי הספרדים משנים מעט את הסדר בסוף: "שַׁלְשֶׁלֶת יֶרַח בֶּן יוֹמוֹ קַרְנֵי פָרָה מֵרְכָא כְפוּלָה").</p>
+<p><b>שְׁמוֹת הַטְּעָמִים לְמִנְהַג אַשְׁכְּנַז</b> (פולין וליטא):</p>
+<p>מֻנַּח זַרְקָא, מֻנַּח סְגּוֹל.<br>
+מֻנַּח רְבִיעִי, מַהְפַּךְ פַּשְׁטָא, זָקֵף קָטָן, זָקֵף גָּדוֹל.<br>
+מֵרְכָא טִפְחָא, מֻנַּח אַתְנַחְתָּא.<br>
+פָּזֵר, תְּלִישָׁא קְטַנָּה, תְּלִישָׁא גְדוֹלָה, קַדְמָא וְאַזְלָא, גֵּרֵשׁ, גֵּרְשַׁיִם.<br>
+דַּרְגָּא תְּבִיר, יְתִיב, פָּסֵק.<br>
+מֵרְכָא טִפְחָא, מֻנַּח סוֹף פָּסוּק.</p>
+<p><b>הַטְּעָמִים הַנְּדִירִים</b> (בסוף): שַׁלְשֶׁלֶת, יֶרַח בֶּן יוֹמוֹ, קַרְנֵי פָרָה, מֵרְכָא כְפוּלָה.</p>`;
 
 // ---------------------------------------------------------------- boot
 async function boot() {
