@@ -43,7 +43,7 @@ const STR = {
     mikraFirst: 'מקרא — פעם ראשונה', mikraSecond: 'מקרא — פעם שנייה', mikraOnce: 'מקרא',
     onkelosSec: 'תרגום אונקלוס', rashiSec: 'רש"י',
     doneAliyah: 'סיימתי עלייה זו ✓', doneHaftara: 'סיימתי את ההפטרה ✓', aliyahDoneAlready: 'הושלם ✓',
-    parshaDone: 'סיימת את כל הפרשה! 🎉', bookmarkSaved: 'הסימניה נשמרה',
+    parshaDone: 'סיימת את כל הפרשה! 🎉',
     noBookmark: 'אין סימניה שמורה', chapter: 'פרק',
     todayRead: 'היום ({day}): עלייה {aliyah}', go: 'עבור',
     streak: 'רצף שבועות', doneParshiot: 'פרשות שהושלמו', versesLeft: 'פסוקים שנותרו השבוע',
@@ -55,8 +55,7 @@ const STR = {
     endOfAliyah: 'סוף עלייה', notifNA: 'התראות זמינות רק באפליקציה',
     targumBg: 'רקע לתרגום', mikra2C: 'מקרא (פעם ב\'):', menuTeamim: 'שמות הטעמים',
     lastVerseRepeat: 'חזרת הפסוק האחרון', bookmarkAdded: 'הסימניה נוספה',
-    bookmarkRemoved: 'הסימניה הוסרה', noBookmarks: 'אין סימניות שמורות',
-    bookmarkDelete: 'הסר', bookmarkAt: 'פרק {c} פסוק {v}',
+    bookmarkRemoved: 'הסימניה הוסרה',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -83,7 +82,7 @@ const STR = {
     mikraFirst: 'Mikra — first reading', mikraSecond: 'Mikra — second reading', mikraOnce: 'Mikra',
     onkelosSec: 'Targum Onkelos', rashiSec: 'Rashi',
     doneAliyah: 'Finished this aliyah ✓', doneHaftara: 'Finished the haftarah ✓', aliyahDoneAlready: 'Completed ✓',
-    parshaDone: 'You finished the whole parashah! 🎉', bookmarkSaved: 'Bookmark saved',
+    parshaDone: 'You finished the whole parashah! 🎉',
     noBookmark: 'No saved bookmark', chapter: 'Chapter',
     todayRead: 'Today ({day}): aliyah {aliyah}', go: 'Go',
     streak: 'Week streak', doneParshiot: 'Parshiot completed', versesLeft: 'Verses left this week',
@@ -95,8 +94,7 @@ const STR = {
     endOfAliyah: 'End of aliyah', notifNA: 'Notifications are available only in the app',
     targumBg: 'Targum background', mikra2C: 'Mikra (2nd time):', menuTeamim: "Te'amim names",
     lastVerseRepeat: 'Repeat of the last verse', bookmarkAdded: 'Bookmark added',
-    bookmarkRemoved: 'Bookmark removed', noBookmarks: 'No saved bookmarks',
-    bookmarkDelete: 'Remove', bookmarkAt: 'Chapter {c} verse {v}',
+    bookmarkRemoved: 'Bookmark removed',
   },
 };
 
@@ -149,13 +147,14 @@ function findBookmark(c, v) {
   return bookmarks.findIndex(b => b.loc === S.loc && b.idx === pos.idx && b.aliyah === pos.aliyah && b.c === c && b.v === v);
 }
 function isVerseBookmarked(c, v) { return findBookmark(c, v) >= 0; }
+// only one bookmark at a time: marking a new verse replaces the previous bookmark
 function toggleVerseBookmark(c, v) {
   const i = findBookmark(c, v);
   if (i >= 0) {
     bookmarks.splice(i, 1);
     toast(t('bookmarkRemoved'));
   } else {
-    bookmarks.push({ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now() });
+    bookmarks = [{ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now() }];
     toast(t('bookmarkAdded'));
   }
   saveBookmarks();
@@ -798,12 +797,7 @@ function bindUI() {
   $('menuOverlay').addEventListener('click', closeMenu);
   $('miToday').addEventListener('click', () => { closeMenu(); gotoParsha(currentWeekIdx(), 0); });
   $('miProgress').addEventListener('click', () => { closeMenu(); renderProgress(); openPage('progressPage'); });
-  $('miBookmarkGo').addEventListener('click', () => {
-    closeMenu();
-    if (!bookmarks.length) { toast(t('noBookmarks')); return; }
-    renderBookmarksList();
-    openPage('bookmarksModal');
-  });
+  $('miBookmarkGo').addEventListener('click', () => { closeMenu(); goToBookmark(); });
   $('miFontUp').addEventListener('click', () => { S.fontSize = Math.min(120, S.fontSize + 2); saveSettings(); applyAll(); });
   $('miFontDown').addEventListener('click', () => { S.fontSize = Math.max(18, S.fontSize - 2); saveSettings(); applyAll(); });
   $('miSettings').addEventListener('click', () => { closeMenu(); openPage('settingsPage'); });
@@ -831,11 +825,7 @@ function bindUI() {
   $('btnPlay').addEventListener('click', () => { scrolling ? stopAutoScroll() : startAutoScroll(); });
   $('speedUp').addEventListener('click', () => setSpeed(S.speed + 1));
   $('speedDown').addEventListener('click', () => setSpeed(S.speed - 1));
-  $('btnBookmark').addEventListener('click', () => {
-    if (!bookmarks.length) { toast(t('noBookmarks')); return; }
-    renderBookmarksList();
-    openPage('bookmarksModal');
-  });
+  $('btnBookmark').addEventListener('click', goToBookmark);
   $('btnZen').addEventListener('click', toggleZen);
   $('zenExit').addEventListener('click', toggleZen);
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
@@ -887,38 +877,17 @@ function bindUI() {
   }));
 }
 
-function renderBookmarksList() {
-  const list = $('bookmarksList');
-  if (!bookmarks.length) {
-    list.innerHTML = `<p class="hint">${t('noBookmarks')}</p>`;
-    return;
-  }
-  let h = '';
-  bookmarks.forEach((b, i) => {
-    const pm = PARSHIYOT[SCHEDULE[b.loc][b.idx][1]];
-    const aliyahName = (S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN)[b.aliyah];
-    h += `<button class="pickrow" data-i="${i}">
-      <span>${pm.he} · ${aliyahName}${b.c ? ' · ' + t('bookmarkAt', { c: gematria(b.c), v: gematria(b.v) }) : ''}</span>
-      <span class="pd bookmarkdel" data-del="${i}">✕</span></button>`;
+function goToBookmark() {
+  if (!bookmarks.length) { toast(t('noBookmark')); return; }
+  const b = bookmarks[0];
+  S.loc = b.loc; saveSettings();
+  pos.loc = b.loc; pos.idx = b.idx; pos.aliyah = b.aliyah; pos.scroll = 0;
+  savePos();
+  applyAll();
+  renderReader(true).then(() => {
+    const el = document.querySelector(`.verse[data-cv="${b.c}:${b.v}"]`);
+    if (el) el.scrollIntoView({ block: 'center' });
   });
-  list.innerHTML = h;
-  list.querySelectorAll('.pickrow').forEach(r => r.addEventListener('click', ev => {
-    if (ev.target.closest('.bookmarkdel')) return;
-    const b = bookmarks[+r.dataset.i];
-    $('bookmarksModal').classList.add('hidden');
-    S.loc = b.loc; saveSettings();
-    pos.loc = b.loc; pos.idx = b.idx; pos.aliyah = b.aliyah; pos.scroll = b.scroll || 0;
-    savePos();
-    applyAll();
-    renderReader(true);
-  }));
-  list.querySelectorAll('.bookmarkdel').forEach(x => x.addEventListener('click', ev => {
-    ev.stopPropagation();
-    bookmarks.splice(+x.dataset.del, 1);
-    saveBookmarks();
-    renderBookmarksList();
-    renderReader(true);
-  }));
 }
 
 const ABOUT_HTML = `
