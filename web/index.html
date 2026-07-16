@@ -37,7 +37,7 @@
   </div>
 
   <div id="readerBar">
-    <div id="progressChip" class="progressbar" title="התקדמות בפרשה"><div id="progressFill" class="progressfill"></div></div>
+    <span id="progressChip" class="chip">0%</span>
     <div id="viewFilter" class="seg3">
       <button data-vf="all" class="on">הכל</button>
       <button data-vf="mikra">מקרא</button>
@@ -49,21 +49,18 @@
   <main id="content" tabindex="0"></main>
 
   <div id="scrollbar" class="bottombar">
-    <div class="scrollctl">
-      <span data-i18n="autoScroll">גלילה אוטומטית:</span>
-      <button id="btnPlay" class="iconbtn playbtn" aria-label="הפעל גלילה">▶</button>
-    </div>
-    <div class="speedctl">
-      <span data-i18n="speed">מהירות:</span>
-      <button id="speedDown" class="stepbtn">−</button>
-      <span id="speedVal">55</span>
-      <button id="speedUp" class="stepbtn">+</button>
-    </div>
-    <div class="fontctl">
-      <span data-i18n="fontSize">גודל הכתב</span>
-      <button id="fontDownMain" class="stepbtn">−</button>
-      <span id="fontValMain">54</span>
-      <button id="fontUpMain" class="stepbtn">+</button>
+    <div id="scrollProgress" class="scrollprogress"><div id="scrollProgressFill" class="scrollprogressfill"></div></div>
+    <div class="bottombarrow">
+      <div class="scrollctl">
+        <span data-i18n="autoScroll">גלילה אוטומטית:</span>
+        <button id="btnPlay" class="iconbtn playbtn" aria-label="הפעל גלילה">▶</button>
+      </div>
+      <div class="speedctl">
+        <span data-i18n="speed">מהירות:</span>
+        <button id="speedDown" class="stepbtn">−</button>
+        <span id="speedVal">55</span>
+        <button id="speedUp" class="stepbtn">+</button>
+      </div>
     </div>
   </div>
 
@@ -176,22 +173,26 @@
       <div class="colorrow">
         <span data-i18n="onkelosC">אונקולוס:</span>
         <span class="colorsample targum-sample" id="sampleOnkelos">בְּקַדְמִין בְּרָא</span>
-        <input type="color" id="colOnkelos" class="colorpick" title="שנה צבע">
+        <input type="color" id="colOnkelos" class="colorpick" title="שנה צבע" list="swatchOnkelos">
+        <datalist id="swatchOnkelos"><option value="#275079"></option></datalist>
       </div>
       <div class="colorrow">
         <span data-i18n="rashiC">רש"י:</span>
         <span class="colorsample rashi-sample" id="sampleRashi">בראשית ברא</span>
-        <input type="color" id="colRashi" class="colorpick" title="שנה צבע">
+        <input type="color" id="colRashi" class="colorpick" title="שנה צבע" list="swatchRashi">
+        <datalist id="swatchRashi"><option value="#6a4a1f"></option></datalist>
       </div>
       <div class="colorrow">
         <span data-i18n="mikraC">מקרא:</span>
         <span class="colorsample mikra-sample" id="sampleMikra">בְּרֵאשִׁ֖ית</span>
-        <input type="color" id="colMikra" class="colorpick" title="שנה צבע">
+        <input type="color" id="colMikra" class="colorpick" title="שנה צבע" list="swatchMikra">
+        <datalist id="swatchMikra"><option value="#16161a"></option></datalist>
       </div>
       <div class="colorrow">
         <span data-i18n="mikra2C">מקרא (פעם ב׳):</span>
         <span class="colorsample mikra2-sample" id="sampleMikra2">בְּרֵאשִׁ֖ית</span>
-        <input type="color" id="colMikra2" class="colorpick" title="שנה צבע">
+        <input type="color" id="colMikra2" class="colorpick" title="שנה צבע" list="swatchMikra2">
+        <datalist id="swatchMikra2"><option value="#3d5a80"></option></datalist>
       </div>
       <button id="btnResetColors" class="outlinebtn" data-i18n="origColors">צבעים מקוריים</button>
     </div>
@@ -292,13 +293,21 @@
 </div>
 
 <!-- ===================== TE'AMIM NAMES ===================== -->
-<div id="teamimModal" class="modal hidden">
-  <div class="modalbox">
-    <h3 data-i18n="menuTeamim">שמות הטעמים</h3>
-    <div id="teamimBody" class="aboutbody"></div>
-    <button class="outlinebtn" data-close="teamimModal" data-i18n="close">סגור</button>
+<section id="teamimPage" class="page hidden">
+  <header class="pagehead">
+    <button class="iconbtn pageback" data-close="teamimPage">←</button>
+    <h2 data-i18n="menuTeamim">שמות הטעמים</h2>
+  </header>
+  <div class="pagebody">
+    <div class="setgroup" style="border-bottom:none;">
+      <div class="seg2" id="segNusach">
+        <button data-val="seph" data-i18n="sephard">ספרד</button>
+        <button data-val="ashk" data-i18n="ashkenaz">אשכנז</button>
+      </div>
+    </div>
+    <div id="teamimBody" class="teamimbody"></div>
   </div>
-</div>
+</section>
 
 <!-- ===================== ABOUT ===================== -->
 <div id="aboutModal" class="modal hidden">

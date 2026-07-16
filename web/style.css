@@ -159,13 +159,14 @@ html[data-theme="dark"] .verse.bookmarked::before { background: #8db8e8; color: 
 .bottombar {
   position: fixed; bottom: 0; right: 0; left: 0;
   background: var(--bg); border-top: 1px solid var(--line);
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 14px calc(env(safe-area-inset-bottom) + 6px);
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 14px calc(env(safe-area-inset-bottom) + 6px);
   font-size: 1rem; z-index: 30;
 }
-.scrollctl, .speedctl, .fontctl { display: flex; align-items: center; gap: 6px; }
-.bottombar { flex-wrap: wrap; gap: 6px 10px; row-gap: 4px; }
-.bottombar .scrollctl span, .bottombar .speedctl span[data-i18n], .bottombar .fontctl span[data-i18n] { font-size: .85rem; }
+.bottombarrow { display: flex; align-items: center; justify-content: space-between; }
+.scrollctl, .speedctl { display: flex; align-items: center; gap: 6px; }
+.scrollprogress { width: 100%; height: 6px; background: var(--chip); border-radius: 3px; overflow: hidden; flex: 0 0 auto; }
+.scrollprogressfill { height: 100%; width: 0%; background: var(--blue); border-radius: 3px; transition: width .15s linear; }
 .playbtn {
   border: 2px solid var(--navy); border-radius: 50%; width: 40px; height: 40px;
   color: var(--navy); font-size: 1rem; display: inline-flex; align-items: center; justify-content: center;
@@ -266,6 +267,15 @@ html[data-theme="dark"] .outlinebtn { border-color: #8db8e8; color: #8db8e8; }
 .statbox .l { font-size: .8rem; color: #888; }
 .histrow { display: flex; justify-content: space-between; padding: 10px 20px; border-bottom: 1px solid var(--line); font-size: 1rem; }
 .histrow .st { font-weight: 700; }
+
+/* ===== te'amim names page ===== */
+.teamimbody { padding: 6px 20px 40px; }
+.teamimbody h4 { text-align: center; margin: 22px 0 6px; font-size: 1.1rem; }
+.teamimline {
+  text-align: center; font-size: 1.55rem; line-height: 2.6; margin: 4px 0;
+  font-family: 'FrankRuehl', serif;
+}
+.teamimbody .hint { text-align: center; }
 .histrow .st.full { color: #3e7d47; }
 .histrow .st.part { color: #c08a2d; }
 .histrow .st.none { color: #999; }

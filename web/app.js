@@ -106,7 +106,7 @@ const DEFAULTS = {
   colors: {}, theme: 'light', loc: 'il',
   reminderOn: false, reminderDay: 4, reminderTime: '20:00',
   font: 'frank', scrollbar: 'yes', autoAdvance: 'yes',
-  dailyPlan: false, keepAwake: false, autoMark: true, viewFilter: 'all',
+  dailyPlan: false, keepAwake: true, autoMark: true, viewFilter: 'all',
   targumBg: 'yes',
 };
 
@@ -126,6 +126,7 @@ if (!bookmarks) {
 }
 let scrolling = false, scrollRAF = 0, lastTs = 0, scrollRemainder = 0;
 let longPressTimer = null;
+let teamimNusach = S.minhag === 'ashk' ? 'ashk' : 'seph';
 let wakeLock = null;
 let renderSeq = 0;
 
@@ -387,6 +388,7 @@ async function renderReader(keepScroll) {
   if (!keepScroll) { pos.scroll = 0; savePos(); }
   updateProgressChip();
   updateNavButtons();
+  updateScrollProgress();
 }
 
 function updateProgressChip() {
@@ -394,7 +396,15 @@ function updateProgressChip() {
   const n = aliyahCount();
   let done = 0;
   for (let i = 0; i < n; i++) if (p.a[i]) done++;
-  $('progressFill').style.width = Math.round(done / n * 100) + '%';
+  $('progressChip').textContent = Math.round(done / n * 100) + '%';
+}
+
+// how far scrolled through the current aliyah's page (independent of aliyah-completion progress)
+function updateScrollProgress() {
+  const c = $('content');
+  const max = c.scrollHeight - c.clientHeight;
+  const pct = max > 0 ? Math.min(100, Math.max(0, (c.scrollTop / max) * 100)) : 0;
+  $('scrollProgressFill').style.width = pct + '%';
 }
 
 function updateNavButtons() {
@@ -648,6 +658,18 @@ function bindSeg(id, key, after) {
   }));
 }
 
+// apply the custom color overrides only (CSS vars + sample swatch text) — deliberately
+// does NOT touch the <input type=color> .value attributes, so it's safe to call while
+// the user is actively dragging inside one of those pickers (reassigning .value mid-drag
+// can confuse the native color-picker UI and make it appear stuck on black).
+function applyColorVars() {
+  const root = document.documentElement.style;
+  if (S.colors.targum) root.setProperty('--targum', S.colors.targum); else root.removeProperty('--targum');
+  if (S.colors.rashi) root.setProperty('--rashi', S.colors.rashi); else root.removeProperty('--rashi');
+  if (S.colors.mikra) { root.setProperty('--mikra', S.colors.mikra); } else root.removeProperty('--mikra');
+  if (S.colors.mikra2) { root.setProperty('--mikra2', S.colors.mikra2); } else root.removeProperty('--mikra2');
+}
+
 function applyAll() {
   // theme, font, colors, font size, i18n, bars
   document.documentElement.setAttribute('data-theme', S.theme);
@@ -656,15 +678,10 @@ function applyAll() {
   document.documentElement.setAttribute('dir', 'rtl'); // app is RTL even in English UI
   $('content').style.fontSize = S.fontSize + 'px';
   document.body.setAttribute('data-targumbg', S.targumBg);
-  const root = document.documentElement.style;
-  if (S.colors.targum) root.setProperty('--targum', S.colors.targum); else root.removeProperty('--targum');
-  if (S.colors.rashi) root.setProperty('--rashi', S.colors.rashi); else root.removeProperty('--rashi');
-  if (S.colors.mikra) { root.setProperty('--mikra', S.colors.mikra); } else root.removeProperty('--mikra');
-  if (S.colors.mikra2) { root.setProperty('--mikra2', S.colors.mikra2); } else root.removeProperty('--mikra2');
+  applyColorVars();
   $('scrollbar').classList.toggle('hidden', S.scrollbar !== 'yes');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   $('fontVal').textContent = S.fontSize;
-  $('fontValMain').textContent = S.fontSize;
   $('speedVal').textContent = S.speed;
   $('speedVal2').textContent = S.speed;
   seg($('segMode'), S.mode); seg($('segTeamim'), S.teamim); seg($('segHaftara'), S.haftara);
@@ -737,10 +754,10 @@ function bindSettings() {
   document.querySelectorAll('input[name=font]').forEach(r => r.addEventListener('change', ev => {
     S.font = ev.target.value; saveSettings(); applyAll();
   }));
-  $('colOnkelos').addEventListener('input', ev => { S.colors.targum = ev.target.value; saveSettings(); applyAll(); });
-  $('colRashi').addEventListener('input', ev => { S.colors.rashi = ev.target.value; saveSettings(); applyAll(); });
-  $('colMikra').addEventListener('input', ev => { S.colors.mikra = ev.target.value; saveSettings(); applyAll(); });
-  $('colMikra2').addEventListener('input', ev => { S.colors.mikra2 = ev.target.value; saveSettings(); applyAll(); });
+  $('colOnkelos').addEventListener('input', ev => { S.colors.targum = ev.target.value; saveSettings(); applyColorVars(); });
+  $('colRashi').addEventListener('input', ev => { S.colors.rashi = ev.target.value; saveSettings(); applyColorVars(); });
+  $('colMikra').addEventListener('input', ev => { S.colors.mikra = ev.target.value; saveSettings(); applyColorVars(); });
+  $('colMikra2').addEventListener('input', ev => { S.colors.mikra2 = ev.target.value; saveSettings(); applyColorVars(); });
   $('btnResetColors').addEventListener('click', () => { S.colors = {}; saveSettings(); applyAll(); });
   $('btnNotifPerm').addEventListener('click', () => {
     const n = native();
@@ -828,6 +845,7 @@ function bindUI() {
   // save scroll position (debounced)
   let scrollT = 0;
   $('content').addEventListener('scroll', () => {
+    updateScrollProgress();
     clearTimeout(scrollT);
     scrollT = setTimeout(() => {
       pos.scroll = $('content').scrollTop;
@@ -858,14 +876,15 @@ function bindUI() {
   $('content').addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
   $('content').addEventListener('touchend', () => clearTimeout(longPressTimer));
   $('content').addEventListener('touchcancel', () => clearTimeout(longPressTimer));
-  // font-size stepper on the main screen (mirrors the scroll-speed stepper)
-  $('fontUpMain').addEventListener('click', () => { S.fontSize = Math.min(120, S.fontSize + 2); saveSettings(); applyAll(); });
-  $('fontDownMain').addEventListener('click', () => { S.fontSize = Math.max(18, S.fontSize - 2); saveSettings(); applyAll(); });
   $('miTeamim').addEventListener('click', () => {
     closeMenu();
-    $('teamimBody').innerHTML = TEAMIM_HTML;
-    openPage('teamimModal');
+    renderTeamimPage(teamimNusach);
+    openPage('teamimPage');
   });
+  $('segNusach').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    teamimNusach = b.dataset.val;
+    renderTeamimPage(teamimNusach);
+  }));
 }
 
 function renderBookmarksList() {
@@ -914,24 +933,69 @@ const ABOUT_HTML = `
 <p>גופנים: פרנק-רוהל וכתר (Culmus), עזרא (SIL OFL).</p>
 <p>הטקסטים נבדקו אך ייתכנו טעויות — נא לדווח. אין לסמוך על האפליקציה לקריאה בציבור.</p>`;
 
-const TEAMIM_HTML = `
-<p><b>אֵלּוּ שְׁמוֹת הַטְּעָמִים</b> (נוסח כללי):</p>
-<p>קַדְמָא מֻנַּח זַרְקָא מֻנַּח סְגּוֹל,<br>
-מֻנַּח רְבִיעִי מַהְפָּךְ פַּשְׁטָא זָקֵף קָטָן,<br>
-וְזָקֵף גָּדוֹל מֵרְכָא טִפְחָא מֻנַּח אַתְנַחְתָּא,<br>
-פָּזֵר תְּלִישָׁא קְטַנָּה תְּלִישָׁא גְדוֹלָה קַדְמָא וְאַזְלָא,<br>
-אַזְלָא גֵרֵשׁ גֵּרְשַׁיִם דַּרְגָּא תְּבִיר יְתִיב,<br>
-פָּסֵק וְסוֹף פָּסוּק,<br>
-שַׁלְשֶׁלֶת קַרְנֵי פָרָה מֵרְכָא כְפוּלָה יֶרַח בֶּן יוֹמוֹ.</p>
-<p class="hint">(הערה: בחלק מסידורי הספרדים משנים מעט את הסדר בסוף: "שַׁלְשֶׁלֶת יֶרַח בֶּן יוֹמוֹ קַרְנֵי פָרָה מֵרְכָא כְפוּלָה").</p>
-<p><b>שְׁמוֹת הַטְּעָמִים לְמִנְהַג אַשְׁכְּנַז</b> (פולין וליטא):</p>
-<p>מֻנַּח זַרְקָא, מֻנַּח סְגּוֹל.<br>
-מֻנַּח רְבִיעִי, מַהְפַּךְ פַּשְׁטָא, זָקֵף קָטָן, זָקֵף גָּדוֹל.<br>
-מֵרְכָא טִפְחָא, מֻנַּח אַתְנַחְתָּא.<br>
-פָּזֵר, תְּלִישָׁא קְטַנָּה, תְּלִישָׁא גְדוֹלָה, קַדְמָא וְאַזְלָא, גֵּרֵשׁ, גֵּרְשַׁיִם.<br>
-דַּרְגָּא תְּבִיר, יְתִיב, פָּסֵק.<br>
-מֵרְכָא טִפְחָא, מֻנַּח סוֹף פָּסוּק.</p>
-<p><b>הַטְּעָמִים הַנְּדִירִים</b> (בסוף): שַׁלְשֶׁלֶת, יֶרַח בֶּן יוֹמוֹ, קַרְנֵי פָרָה, מֵרְכָא כְפוּלָה.</p>`;
+// Unicode Hebrew cantillation (te'amim) combining marks, U+0591-U+05AA.
+// Each name below is shown WITH its own actual mark applied to its first letter,
+// so the reader can see what the trope symbol looks like.
+const TAAM = {
+  etnachta: '֑', segol: '֒', shalshelet: '֓', zakefKatan: '֔', zakefGadol: '֕',
+  tipcha: '֖', revia: '֗', zarka: '֘', pashta: '֙', yetiv: '֚',
+  tevir: '֛', geresh: '֜', gershayim: '֞', karneyPara: '֟',
+  telishaGedola: '֠', pazer: '֡', munach: '֣', mahapakh: '֤',
+  merkha: '֥', merkhaKefula: '֦', darga: '֧', kadma: '֨', telishaKetana: '֩',
+  yerachBenYomo: '֪',
+};
+function taamWord(tok) {
+  if (typeof tok !== 'object') return esc(tok);
+  const mark = TAAM[tok[1]];
+  const w = tok[0];
+  return mark ? esc(w[0]) + mark + esc(w.slice(1)) : esc(w);
+}
+function teamimLine(tokens) {
+  return tokens.map(taamWord).join(' ').replace(/ +([,.:])/g, '$1');
+}
+
+const SEPH_TEAMIM = {
+  title: 'אֵלּוּ שְׁמוֹת הַטְּעָמִים (נוסח ספרד):',
+  lines: [
+    [['קַדְמָא', 'kadma'], ['מֻנַּח', 'munach'], ['זַרְקָא', 'zarka'], ['מֻנַּח', 'munach'], ['סְגּוֹל', 'segol'], ','],
+    [['מֻנַּח', 'munach'], ['רְבִיעִי', 'revia'], ['מַהְפָּךְ', 'mahapakh'], ['פַּשְׁטָא', 'pashta'], ['זָקֵף', 'zakefKatan'], 'קָטָן', ','],
+    [['וְזָקֵף', 'zakefGadol'], 'גָּדוֹל', ['מֵרְכָא', 'merkha'], ['טִפְחָא', 'tipcha'], ['מֻנַּח', 'munach'], ['אַתְנַחְתָּא', 'etnachta'], ','],
+    [['פָּזֵר', 'pazer'], ['תְּלִישָׁא', 'telishaKetana'], 'קְטַנָּה', ['תְּלִישָׁא', 'telishaGedola'], 'גְדוֹלָה', ['קַדְמָא', 'kadma'], ['וְאַזְלָא', 'geresh'], ','],
+    [['אַזְלָא', 'geresh'], ['גֵרֵשׁ', 'geresh'], ['גֵּרְשַׁיִם', 'gershayim'], ['דַּרְגָּא', 'darga'], ['תְּבִיר', 'tevir'], ['יְתִיב', 'yetiv'], ','],
+    ['פָּסֵק׀', 'וְסוֹף', 'פָּסוּק׃'],
+    [['שַׁלְשֶׁלֶת', 'shalshelet'], ['קַרְנֵי', 'karneyPara'], 'פָרָה', ['מֵרְכָא', 'merkhaKefula'], 'כְפוּלָה', ['יֶרַח', 'yerachBenYomo'], 'בֶּן', 'יוֹמוֹ', '.'],
+  ],
+  note: '(הערה: בחלק מסידורי הספרדים משנים מעט את הסדר בסוף: "שַׁלְשֶׁלֶת יֶרַח בֶּן יוֹמוֹ קַרְנֵי פָרָה מֵרְכָא כְפוּלָה").',
+};
+
+const ASHK_TEAMIM = {
+  title: 'שְׁמוֹת הַטְּעָמִים לְמִנְהַג אַשְׁכְּנַז (פולין וליטא):',
+  lines: [
+    [['מֻנַּח', 'munach'], ['זַרְקָא', 'zarka'], ',', ['מֻנַּח', 'munach'], ['סְגּוֹל', 'segol'], '.'],
+    [['מֻנַּח', 'munach'], ['רְבִיעִי', 'revia'], ',', ['מַהְפַּךְ', 'mahapakh'], ['פַּשְׁטָא', 'pashta'], ',', ['זָקֵף', 'zakefKatan'], 'קָטָן', ',', ['זָקֵף', 'zakefGadol'], 'גָּדוֹל', '.'],
+    [['מֵרְכָא', 'merkha'], ['טִפְחָא', 'tipcha'], ',', ['מֻנַּח', 'munach'], ['אַתְנַחְתָּא', 'etnachta'], '.'],
+    [['פָּזֵר', 'pazer'], ',', ['תְּלִישָׁא', 'telishaKetana'], 'קְטַנָּה', ',', ['תְּלִישָׁא', 'telishaGedola'], 'גְדוֹלָה', ',', ['קַדְמָא', 'kadma'], ['וְאַזְלָא', 'geresh'], ',', ['גֵּרֵשׁ', 'geresh'], ',', ['גֵּרְשַׁיִם', 'gershayim'], '.'],
+    [['דַּרְגָּא', 'darga'], ['תְּבִיר', 'tevir'], ',', ['יְתִיב', 'yetiv'], ',', 'פָּסֵק׀.'],
+    [['מֵרְכָא', 'merkha'], ['טִפְחָא', 'tipcha'], ',', ['מֻנַּח', 'munach'], 'סוֹף', 'פָּסוּק׃.'],
+  ],
+  rareTitle: 'הַטְּעָמִים הַנְּדִירִים (בסוף):',
+  rareLines: [
+    [['שַׁלְשֶׁלֶת', 'shalshelet'], ',', ['יֶרַח', 'yerachBenYomo'], 'בֶּן', 'יוֹמוֹ', ',', ['קַרְנֵי', 'karneyPara'], 'פָרָה', ',', ['מִירְכָא', 'merkhaKefula'], 'כְפוּלָה', '.'],
+  ],
+};
+
+function renderTeamimPage(nusach) {
+  seg($('segNusach'), nusach);
+  const d = nusach === 'ashk' ? ASHK_TEAMIM : SEPH_TEAMIM;
+  let h = `<h4>${esc(d.title)}</h4>`;
+  h += d.lines.map(l => `<div class="teamimline">${teamimLine(l)}</div>`).join('');
+  if (d.note) h += `<p class="hint">${esc(d.note)}</p>`;
+  if (d.rareTitle) {
+    h += `<h4>${esc(d.rareTitle)}</h4>`;
+    h += d.rareLines.map(l => `<div class="teamimline">${teamimLine(l)}</div>`).join('');
+  }
+  $('teamimBody').innerHTML = h;
+}
 
 // ---------------------------------------------------------------- boot
 async function boot() {
