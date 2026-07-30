@@ -10,7 +10,8 @@ Torah text with te'amim, Targum Onkelos, Rashi, haftarot, the parashah
 calendar until 2046 — is bundled inside the APK. **No internet is ever
 needed, no ads, no tracking.**
 
-A ready-to-install debug APK is in [`releases/shnayim-mikra-debug.apk`](releases/shnayim-mikra-debug.apk).
+Ready-to-install APKs are published on [GitHub Releases](https://github.com/SnirR/shnayim-mikra-app/releases).
+New releases install over the previous version without uninstalling.
 
 ## Features
 
@@ -82,10 +83,19 @@ cd tools && npm install && npm test
 
 ```bash
 cd android
-./gradlew assembleDebug     # → app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug     # → app/build/outputs/apk/debug/app-debug.apk (local dev)
+./gradlew assembleRelease   # → app/build/outputs/apk/release/app-release.apk
 ```
 
 Requires an Android SDK (compileSdk 34); point `local.properties` at it.
+
+Release builds for distribution are signed in CI with a persistent keystore
+(GitHub secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`,
+`RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`). That keeps the signing certificate
+the same across releases so Android accepts in-place updates.
+
+If you installed an older debug-signed APK, uninstall it once before installing
+the first release-signed build. After that, future updates install on top.
 
 ## Android shell
 
