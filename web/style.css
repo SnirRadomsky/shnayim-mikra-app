@@ -392,6 +392,47 @@ html[data-theme="dark"] .alrowfill { background: #8db8e8; }
 }
 .zenplaybtn.playing { background: rgba(29,52,97,.85); }
 
+/* ===== zen minimap: "how big is this aliyah, and where in it am I" ===== */
+.zenminimaptoggle {
+  position: fixed; top: calc(env(safe-area-inset-top) + 10px); right: 10px; z-index: 60;
+  background: rgba(0,0,0,.35); color: #fff; border: none; border-radius: 50%;
+  width: 38px; height: 38px; font-size: 1rem; cursor: pointer;
+}
+.zenminimaptoggle.on { background: rgba(47,142,247,.85); }
+
+.zenminimap {
+  position: fixed; top: 50%; left: 6px; z-index: 55;
+  transform: translateY(-50%);
+  opacity: .35; transition: opacity .3s ease;
+}
+.zenminimap.expanded { opacity: .92; }
+.zenminimaptrack {
+  position: relative; width: 9px; border-radius: 5px; overflow: hidden;
+  background: rgba(120,120,130,.35); cursor: pointer; touch-action: none;
+  transition: width .22s ease, background-color .22s ease;
+}
+.zenminimap.expanded .zenminimaptrack {
+  width: 58px; background: rgba(60,60,70,.22); box-shadow: 0 3px 16px rgba(0,0,0,.28);
+}
+.zenminimappreview {
+  position: absolute; top: 0; right: 0; transform-origin: top right;
+  pointer-events: none; opacity: 0; transition: opacity .18s ease;
+}
+.zenminimap.expanded .zenminimappreview { opacity: .85; }
+.zenminimapviewport {
+  position: absolute; left: 0; right: 0; min-height: 6px; border-radius: 4px;
+  background: rgba(47,142,247,.4); border: 1px solid var(--blue);
+  pointer-events: none; transition: background-color .22s ease;
+}
+.zenminimap.expanded .zenminimapviewport { background: rgba(47,142,247,.16); }
+html[data-theme="dark"] .zenminimaptrack { background: rgba(255,255,255,.16); }
+html[data-theme="dark"] .zenminimap.expanded .zenminimaptrack { background: rgba(16,17,22,.55); }
+
+@media (min-width: 700px) {
+  .zenminimap { left: 16px; }
+  .zenminimap.expanded .zenminimaptrack { width: 76px; }
+}
+
 /* zen mode */
 body.zen #topbar, body.zen #parshaNav, body.zen #aliyahNav,
 body.zen #readerBar, body.zen .bottombar, body.zen #dayBanner { display: none; }
