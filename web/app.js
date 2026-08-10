@@ -170,7 +170,7 @@ function toggleVerseBookmark(c, v) {
     const max = el.scrollHeight - el.clientHeight;
     const pct = max > 0 ? Math.round(Math.min(100, Math.max(0, (el.scrollTop / max) * 100))) : 0;
     bookmarks = [{ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now(), pct }];
-    toast(`${t('bookmarkAdded')} · ${pct}%`);
+    toast(t('bookmarkAdded'));
   }
   saveBookmarks();
   renderReader(true);
@@ -178,8 +178,7 @@ function toggleVerseBookmark(c, v) {
 function bookmarkRibbonHTML(c, v) {
   const i = findBookmark(c, v);
   if (i < 0) return '';
-  const pct = typeof bookmarks[i].pct === 'number' ? ` · ${bookmarks[i].pct}%` : '';
-  return `<span class="bmRibbon">🔖 ${t('bookmarkLabel')}${pct}</span>`;
+  return `<span class="bmRibbon">🔖 ${t('bookmarkLabel')}</span>`;
 }
 function t(key, vars) {
   let s = (STR[S.lang] && STR[S.lang][key]) || STR.he[key] || key;
@@ -584,11 +583,17 @@ function renderProgress() {
   const p = progOf(e);
   const n = aliyahCount();
   const names = S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN;
+  // a bookmark in the aliyah currently being displayed here shows its saved scroll % on
+  // that aliyah's cell instead of the verse count, as a finer-grained "how far in" marker
+  const bm = bookmarks[0];
+  const bmAliyah = (bm && bm.loc === S.loc && bm.idx === pos.idx && !p.a[bm.aliyah]) ? bm.aliyah : -1;
 
   let cells = '';
   for (let i = 0; i < n; i++) {
-    cells += `<button class="alcell${p.a[i] ? ' done' : ''}" data-al="${i}">
-      <span class="alname">${names[i]}${p.a[i] ? ' ✓' : ''}</span><span class="alverses" data-alverses="${i}"></span></button>`;
+    const isBm = i === bmAliyah;
+    const alText = isBm && typeof bm.pct === 'number' ? `🔖 ${bm.pct}%` : '';
+    cells += `<button class="alcell${p.a[i] ? ' done' : ''}${isBm ? ' bookmarked' : ''}" data-al="${i}">
+      <span class="alname">${names[i]}${p.a[i] ? ' ✓' : ''}</span><span class="alverses" data-alverses="${i}">${alText}</span></button>`;
   }
 
   // streak: consecutive fully-read weeks before (and including) current week
@@ -646,7 +651,7 @@ function renderProgress() {
       const count = versesForRange(bd, m.aliyot[i]).length;
       if (!p.a[i]) left += count;
       const cEl = body.querySelector(`[data-alverses="${i}"]`);
-      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
+      if (cEl && i !== bmAliyah) cEl.textContent = `${count} ${t('versesWord')}`;
     }
     const el = $('versesLeftN');
     if (el) el.textContent = left;
@@ -657,7 +662,7 @@ function renderProgress() {
       const segs = (S.minhag === 'ashk' ? hd.a : hd.s) || [];
       const count = segs.reduce((sum, seg) => sum + seg.verses.length, 0);
       const cEl = body.querySelector('[data-alverses="7"]');
-      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
+      if (cEl && bmAliyah !== 7) cEl.textContent = `${count} ${t('versesWord')}`;
     }).catch(() => {});
   }
 }
