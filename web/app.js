@@ -1158,9 +1158,10 @@ function updateZenProgressVisibility() {
 // A "how big is this aliyah, and where am I in it" indicator, always shown in fullscreen
 // (zen) mode: a slim, mostly-transparent bar that blooms — VS Code minimap style — into a
 // shrunk real preview of the whole aliyah with the currently-visible slice highlighted.
-// Tapping the collapsed bar expands it and keeps it open; tapping the highlighted viewport
-// box again collapses it. Collapsed, it costs nothing visually or perf-wise; expanded, it's
-// rebuilt from a DOM clone so it always matches what's on screen.
+// Pressing/dragging the bar expands it, scrubs the reading position, and keeps it open —
+// dragging must never collapse it mid-gesture. Only the small ✕ button closes it back down.
+// Collapsed, it costs nothing visually or perf-wise; expanded, it's rebuilt from a DOM clone
+// so it always matches what's on screen.
 const MINIMAP_MAX_TRACK_RATIO = .72; // cap on how much of the viewport height the thumbnail may fill
 let minimapDragging = false;
 
@@ -1194,12 +1195,9 @@ function buildMinimapClone() {
 // refreshes the cloned text preview (needed after content or font-size changes / resize) —
 // skip it on plain scroll, which only has to move the viewport box.
 //
-// the scale is derived from WIDTH only, so glyph shapes stay legible-ish regardless of how
-// tall the aliyah is (some readers use very large font sizes, which makes scrollHeight huge —
-// shrinking scale to force the *whole* thing into a short track would make the preview an
-// invisible hairline). Short aliyot still fit whole in the track at that scale; for long ones
-// (or a big font size) the track is capped and the preview pans to keep the current viewport
-// box centered, same as a real minimap would.
+// the scale always shows the *whole* aliyah at a glance (bounded by both width and height),
+// even if a long aliyah or a big font size shrinks the text past readability — the viewport
+// box's position/size within the whole thing is the point, not legible glyphs.
 function syncMinimap(rebuild) {
   if (!document.body.classList.contains('zen')) return;
   const content = $('content');
@@ -1212,22 +1210,20 @@ function syncMinimap(rebuild) {
 
   const expandedWidth = window.innerWidth >= 700 ? 76 : 58;
   const maxTrackH = window.innerHeight * MINIMAP_MAX_TRACK_RATIO;
-  const scale = expandedWidth / baseW;
-  const fullH = scrollH * scale;
-  const trackH = Math.max(40, Math.round(Math.min(fullH, maxTrackH)));
+  const scale = Math.min(expandedWidth / baseW, maxTrackH / scrollH);
+  const trackH = Math.max(40, Math.round(scrollH * scale));
 
   const maxScroll = Math.max(1, content.scrollHeight - content.clientHeight);
   const ratio = Math.min(1, Math.max(0, content.scrollTop / maxScroll));
-  const vpH = Math.max(6, (content.clientHeight / scrollH) * fullH);
-  const vpTopFull = ratio * (fullH - vpH);
-  const pan = fullH <= trackH ? 0 : Math.min(fullH - trackH, Math.max(0, vpTopFull + vpH / 2 - trackH / 2));
+  const vpH = Math.max(6, (content.clientHeight / scrollH) * trackH);
+  const vpTop = ratio * (trackH - vpH);
 
   track.style.height = trackH + 'px';
-  preview.style.transform = `translateY(${-pan}px) scale(${scale})`;
+  preview.style.transform = `scale(${scale})`;
   preview.style.width = baseW + 'px';
   preview.style.height = scrollH + 'px';
   viewport.style.height = Math.round(vpH) + 'px';
-  viewport.style.top = Math.round(vpTopFull - pan) + 'px';
+  viewport.style.top = Math.round(vpTop) + 'px';
 }
 
 function minimapScrubTo(clientY) {
@@ -1235,11 +1231,6 @@ function minimapScrubTo(clientY) {
   const ratio = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
   const content = $('content');
   content.scrollTop = ratio * (content.scrollHeight - content.clientHeight);
-}
-
-function minimapIsInsideViewport(clientY) {
-  const r = $('zenMinimapViewport').getBoundingClientRect();
-  return clientY >= r.top && clientY <= r.bottom;
 }
 
 function bindUI() {
@@ -1288,16 +1279,11 @@ function bindUI() {
   $('btnBookmark').addEventListener('click', goToBookmark);
   $('btnZen').addEventListener('click', toggleZen);
   $('zenExit').addEventListener('click', toggleZen);
-  // collapsed: any press expands it (and scrubs to that position, unchanged from before).
-  // expanded: pressing the highlighted viewport box again collapses it; pressing anywhere
-  // else keeps it open and just scrubs.
+  // any press (collapsed or expanded) expands it and scrubs to that position — dragging the
+  // highlighted viewport box around is exactly how you navigate, so it must never collapse
+  // mid-drag. Only the explicit close button collapses it back.
   $('zenMinimapTrack').addEventListener('pointerdown', ev => {
-    const mm = $('zenMinimap');
-    if (mm.classList.contains('expanded') && minimapIsInsideViewport(ev.clientY)) {
-      mm.classList.remove('expanded');
-      return;
-    }
-    mm.classList.add('expanded');
+    $('zenMinimap').classList.add('expanded');
     minimapDragging = true;
     try { $('zenMinimapTrack').setPointerCapture(ev.pointerId); } catch (e) {}
     minimapScrubTo(ev.clientY);
@@ -1307,6 +1293,7 @@ function bindUI() {
     minimapScrubTo(ev.clientY);
   });
   window.addEventListener('pointerup', () => { minimapDragging = false; });
+  $('zenMinimapClose').addEventListener('click', () => { $('zenMinimap').classList.remove('expanded'); });
   window.addEventListener('resize', () => syncMinimap(true));
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     S.viewFilter = b.dataset.vf;

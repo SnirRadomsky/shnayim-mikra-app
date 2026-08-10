@@ -423,6 +423,14 @@ html[data-theme="dark"] .alrowfill { background: #8db8e8; }
 html[data-theme="dark"] .zenminimaptrack { background: rgba(255,255,255,.16); }
 html[data-theme="dark"] .zenminimap.expanded .zenminimaptrack { background: rgba(16,17,22,.55); }
 
+.zenminimapclose {
+  position: absolute; top: -34px; left: 50%; transform: translateX(-50%);
+  width: 28px; height: 28px; border-radius: 50%; z-index: 1;
+  background: rgba(0,0,0,.5); color: #fff; border: none; font-size: .85rem; cursor: pointer;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease;
+}
+.zenminimap.expanded .zenminimapclose { opacity: 1; pointer-events: auto; }
+
 @media (min-width: 700px) {
   .zenminimap { left: 16px; }
   .zenminimap.expanded .zenminimaptrack { width: 76px; }
