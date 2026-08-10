@@ -37,8 +37,8 @@ const STR = {
     resetHint: 'במוצאי שבת האפליקציה תעבור אוטומטית לפרשה של השבוע החדש.',
     smart: 'חכם', dailyPlan: 'לוח קריאה יומי (עלייה ליום)', keepAwake: 'השאר מסך דולק בזמן קריאה',
     autoMark: 'סמן עלייה כהושלמה אוטומטית בסוף גלילה',
-    progress: 'התקדמות', chooseParsha: 'בחר פרשה', close: 'סגור',
-    menuToday: 'לפרשת השבוע', menuProgress: 'התקדמות', menuBookmark: 'עבור לסימניה',
+    progress: 'התקדמות השבוע', progressGeneral: 'התקדמות כללית', chooseParsha: 'בחר פרשה', close: 'סגור',
+    menuToday: 'לפרשת השבוע', menuProgress: 'התקדמות השבוע', menuProgressGeneral: 'התקדמות כללית', menuBookmark: 'עבור לסימניה',
     menuFontUp: 'הגדל כתב', menuFontDown: 'הקטן כתב', menuSettings: 'הגדרות', menuAbout: 'אודות',
     autoScroll: 'גלילה אוטומטית:', speed: 'מהירות:',
     all: 'הכל', mikraOnly: 'מקרא', targumOnly: 'תרגום',
@@ -77,8 +77,8 @@ const STR = {
     resetHint: 'After Shabbat the app will automatically move to the new week\'s parashah.',
     smart: 'Smart', dailyPlan: 'Daily plan (aliyah per day)', keepAwake: 'Keep screen on while reading',
     autoMark: 'Auto-mark aliyah complete at end of scroll',
-    progress: 'Progress', chooseParsha: 'Choose parashah', close: 'Close',
-    menuToday: 'This week\'s parashah', menuProgress: 'Progress', menuBookmark: 'Go to bookmark',
+    progress: 'This Week\'s Progress', progressGeneral: 'Overall Progress', chooseParsha: 'Choose parashah', close: 'Close',
+    menuToday: 'This week\'s parashah', menuProgress: 'This Week\'s Progress', menuProgressGeneral: 'Overall Progress', menuBookmark: 'Go to bookmark',
     menuFontUp: 'Increase font', menuFontDown: 'Decrease font', menuSettings: 'Settings', menuAbout: 'About',
     autoScroll: 'Auto-scroll:', speed: 'Speed:',
     all: 'All', mikraOnly: 'Mikra', targumOnly: 'Targum',
@@ -427,24 +427,34 @@ function verseIndexInRange(verses, c, v) {
   return idx < 0 ? 0 : idx + 1;
 }
 
-// the chip shows how much of the whole parasha (all 7 aliyot, by verse count — not just how
-// many whole aliyot are marked done) has been read; a bookmark counts as having reached
-// that verse within its aliyah, even if the aliyah itself isn't marked done yet
-async function updateProgressChip() {
+// verse-level progress across the whole parasha (all 7 aliyot) — a bookmark gives its
+// (not-yet-done) aliyah partial credit up to that verse. Shared by the reader's progress
+// chip and the weekly Progress page's ring + per-aliyah bars, so they always agree.
+async function computeParashaProgress() {
   const e = entry(), m = meta();
   const p = progOf(e);
   const bm = bookmarks[0];
   const bmHere = bm && bm.loc === S.loc && bm.idx === pos.idx ? bm : null;
   const bd = await loadBook(m.book);
-  if (meta() !== m) return; // parasha changed while we were awaiting
+  const perAliyah = [];
   let total = 0, read = 0;
   for (let i = 0; i < 7; i++) {
     const verses = versesForRange(bd, m.aliyot[i]);
-    total += verses.length;
-    if (p.a[i]) read += verses.length;
-    else if (bmHere && bmHere.aliyah === i) read += verseIndexInRange(verses, bmHere.c, bmHere.v);
+    const count = verses.length;
+    let done = 0;
+    if (p.a[i]) done = count;
+    else if (bmHere && bmHere.aliyah === i) done = verseIndexInRange(verses, bmHere.c, bmHere.v);
+    total += count;
+    read += done;
+    perAliyah.push({ count, done, pct: count ? Math.round(done / count * 100) : 0 });
   }
-  $('progressChip').textContent = (total ? Math.round(read / total * 100) : 0) + '%';
+  return { meta: m, total, read, overallPct: total ? Math.round(read / total * 100) : 0, perAliyah };
+}
+
+async function updateProgressChip() {
+  const r = await computeParashaProgress();
+  if (meta() !== r.meta) return; // parasha changed while we were awaiting
+  $('progressChip').textContent = r.overallPct + '%';
 }
 
 // how far scrolled through the current aliyah's page (independent of aliyah-completion progress)
@@ -572,7 +582,16 @@ function setSpeed(v) {
   saveSettings();
 }
 
-// ---------------------------------------------------------------- progress page
+// ---------------------------------------------------------------- progress page (this week's parasha)
+const RING_R = 52, RING_C = 2 * Math.PI * RING_R;
+function setRingPct(circleEl, labelEl, pct) {
+  if (circleEl) {
+    circleEl.style.strokeDasharray = String(RING_C);
+    circleEl.style.strokeDashoffset = String(RING_C * (1 - pct / 100));
+  }
+  if (labelEl) labelEl.textContent = pct + '%';
+}
+
 function renderProgress() {
   const body = $('progressBody');
   const e = entry();
@@ -580,29 +599,94 @@ function renderProgress() {
   const p = progOf(e);
   const n = aliyahCount();
   const names = S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN;
-  // highlight the aliyah currently holding the bookmark (no percentage here — that lives
-  // only in the top progress chip now, which the bookmark also feeds into)
+  // highlight the aliyah currently holding the bookmark
   const bm = bookmarks[0];
   const bmAliyah = (bm && bm.loc === S.loc && bm.idx === pos.idx && !p.a[bm.aliyah]) ? bm.aliyah : -1;
 
-  let cells = '';
+  let rows = '';
   for (let i = 0; i < n; i++) {
-    cells += `<button class="alcell${p.a[i] ? ' done' : ''}${i === bmAliyah ? ' bookmarked' : ''}" data-al="${i}">
-      <span class="alname">${names[i]}${p.a[i] ? ' ✓' : ''}</span><span class="alverses" data-alverses="${i}"></span></button>`;
+    const pct0 = p.a[i] ? 100 : 0;
+    rows += `<button class="alrow${p.a[i] ? ' done' : ''}${i === bmAliyah ? ' bookmarked' : ''}" data-al="${i}">
+      <div class="alrowtop">
+        <span class="alrowname">${names[i]}${p.a[i] ? ' ✓' : ''}</span>
+        <span class="alrowpct" data-alpct="${i}">${pct0}%</span>
+      </div>
+      <div class="alrowbar"><div class="alrowfill" data-alfill="${i}" style="width:${pct0}%"></div></div>
+      <div class="alrowverses" data-alverses="${i}"></div>
+    </button>`;
   }
 
-  // streak: consecutive fully-read weeks before (and including) current week
+  body.innerHTML = `
+    <div class="progring">
+      <svg viewBox="0 0 120 120" class="progringsvg">
+        <circle class="progringbg" cx="60" cy="60" r="${RING_R}"></circle>
+        <circle class="progringfill" id="progRingFill" cx="60" cy="60" r="${RING_R}"></circle>
+      </svg>
+      <div class="progringlabel"><div class="n" id="progRingPct">0%</div></div>
+    </div>
+    <h3 class="progweektitle">${m.he}</h3>
+    <div class="progringsub" id="versesLeftN">…</div>
+    <div class="alrows">${rows}</div>`;
+
+  body.querySelectorAll('.alrow').forEach(c => c.addEventListener('click', () => {
+    const i = +c.dataset.al;
+    p.a[i] = !p.a[i];
+    saveProgress();
+    renderProgress();
+    updateProgressChip();
+  }));
+
+  computeParashaProgress().then(r => {
+    if (meta() !== r.meta) return;
+    r.perAliyah.forEach((a, i) => {
+      const pctEl = body.querySelector(`[data-alpct="${i}"]`);
+      const fillEl = body.querySelector(`[data-alfill="${i}"]`);
+      const versesEl = body.querySelector(`[data-alverses="${i}"]`);
+      if (pctEl) pctEl.textContent = a.pct + '%';
+      if (fillEl) fillEl.style.width = a.pct + '%';
+      if (versesEl) versesEl.textContent = `${a.count} ${t('versesWord')}`;
+    });
+    setRingPct(body.querySelector('#progRingFill'), body.querySelector('#progRingPct'), r.overallPct);
+    const versesLeftEl = body.querySelector('#versesLeftN');
+    if (versesLeftEl) versesLeftEl.textContent = `${r.total - r.read} ${t('versesLeft')}`;
+  }).catch(() => {});
+
+  if (n === 8) {
+    loadHaftarot().then(haft => {
+      const hd = haft[e[1]];
+      const segs = (S.minhag === 'ashk' ? hd.a : hd.s) || [];
+      const count = segs.reduce((sum, seg) => sum + seg.verses.length, 0);
+      const pct = p.a[7] ? 100 : 0;
+      const pctEl = body.querySelector('[data-alpct="7"]');
+      const fillEl = body.querySelector('[data-alfill="7"]');
+      const versesEl = body.querySelector('[data-alverses="7"]');
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (fillEl) fillEl.style.width = pct + '%';
+      if (versesEl) versesEl.textContent = `${count} ${t('versesWord')}`;
+    }).catch(() => {});
+  }
+}
+function fullyDone(e) {
+  const pr = progress[progKey(e)];
+  return !!pr && pr.a.slice(0, 7).every(Boolean);
+}
+
+// ---------------------------------------------------------------- progress page (overall, across weeks)
+function renderProgressGeneral() {
+  const body = $('progressGeneralBody');
   const cw = currentWeekIdx();
-  let streak = 0;
   const arr = sched();
+
+  // streak: consecutive fully-read weeks before (and including) current week
   const cwDone = fullyDone(arr[cw]);
+  let streak = 0;
   for (let i = cw - (cwDone ? 0 : 1); i >= 0; i--) {
     if (fullyDone(arr[i])) streak++;
     else break;
   }
   let total = 0;
   for (const k of Object.keys(progress)) {
-    const [date, key] = k.split('|');
+    const [, key] = k.split('|');
     const pm = PARSHIYOT[key];
     if (pm && progress[k].a.slice(0, 7).every(Boolean)) total++;
   }
@@ -618,52 +702,12 @@ function renderProgress() {
   }
 
   body.innerHTML = `
-    <div class="progparsha">
-      <h3>${m.he}</h3>
-      <div class="progdate">${t('thisWeek')} · ${fmtDate(e[0])}</div>
-      <div class="aliyagrid">${cells}</div>
-    </div>
     <div class="progstats">
       <div class="statbox"><div class="n">${streak}</div><div class="l">${t('streak')}</div></div>
       <div class="statbox"><div class="n">${total}</div><div class="l">${t('doneParshiot')}</div></div>
-      <div class="statbox"><div class="n" id="versesLeftN">…</div><div class="l">${t('versesLeft')}</div></div>
     </div>
     <div class="progparsha"><h3>${t('history')}</h3></div>
     ${hist}`;
-
-  body.querySelectorAll('.alcell').forEach(c => c.addEventListener('click', () => {
-    const i = +c.dataset.al;
-    p.a[i] = !p.a[i];
-    saveProgress();
-    renderProgress();
-    updateProgressChip();
-  }));
-
-  // verse counts per aliyah + verses left (async: needs book)
-  loadBook(m.book).then(bd => {
-    let left = 0;
-    for (let i = 0; i < 7; i++) {
-      const count = versesForRange(bd, m.aliyot[i]).length;
-      if (!p.a[i]) left += count;
-      const cEl = body.querySelector(`[data-alverses="${i}"]`);
-      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
-    }
-    const el = $('versesLeftN');
-    if (el) el.textContent = left;
-  }).catch(() => {});
-  if (n === 8) {
-    loadHaftarot().then(haft => {
-      const hd = haft[e[1]];
-      const segs = (S.minhag === 'ashk' ? hd.a : hd.s) || [];
-      const count = segs.reduce((sum, seg) => sum + seg.verses.length, 0);
-      const cEl = body.querySelector('[data-alverses="7"]');
-      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
-    }).catch(() => {});
-  }
-}
-function fullyDone(e) {
-  const pr = progress[progKey(e)];
-  return !!pr && pr.a.slice(0, 7).every(Boolean);
 }
 
 // ---------------------------------------------------------------- picker
@@ -1027,6 +1071,7 @@ function bindUI() {
   $('menuOverlay').addEventListener('click', closeMenu);
   $('miToday').addEventListener('click', () => { closeMenu(); gotoParsha(currentWeekIdx(), 0); });
   $('miProgress').addEventListener('click', () => { closeMenu(); renderProgress(); openPage('progressPage'); });
+  $('miProgressGeneral').addEventListener('click', () => { closeMenu(); renderProgressGeneral(); openPage('progressGeneralPage'); });
   $('miBookmarkGo').addEventListener('click', () => { closeMenu(); goToBookmark(); });
   $('miFontUp').addEventListener('click', () => { S.fontSize = Math.min(120, S.fontSize + 2); saveSettings(); applyAll(); });
   $('miFontDown').addEventListener('click', () => { S.fontSize = Math.max(18, S.fontSize - 2); saveSettings(); applyAll(); });
