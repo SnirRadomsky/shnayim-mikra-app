@@ -62,6 +62,7 @@ const STR = {
     lastVerseRepeat: 'חזרת הפסוק האחרון', bookmarkAdded: 'הסימניה נוספה',
     bookmarkRemoved: 'הסימניה הוסרה', bookmarkLabel: 'סימניה', versesWord: 'פסוקים',
     zenProgressBar: 'הצג פס התקדמות במסך מלא',
+    zenMinimapLabel: 'הצג מפת גודל עלייה במסך מלא',
     parashaSizeShort: 'פרשה קצרה', parashaSizeMedium: 'פרשה בינונית', parashaSizeLong: 'פרשה ארוכה',
   },
   en: {
@@ -103,6 +104,7 @@ const STR = {
     lastVerseRepeat: 'Repeat of the last verse', bookmarkAdded: 'Bookmark added',
     bookmarkRemoved: 'Bookmark removed', bookmarkLabel: 'Bookmark', versesWord: 'verses',
     zenProgressBar: 'Show progress bar in fullscreen',
+    zenMinimapLabel: 'Show aliyah-size map in fullscreen',
     parashaSizeShort: 'Short parasha', parashaSizeMedium: 'Medium parasha', parashaSizeLong: 'Long parasha',
   },
 };
@@ -114,7 +116,7 @@ const DEFAULTS = {
   reminderOn: false, reminderDay: 4, reminderTime: '20:00',
   font: 'frank', scrollbar: 'yes', autoAdvance: 'yes',
   dailyPlan: false, keepAwake: true, autoMark: true, viewFilter: 'all',
-  targumBg: 'yes', zenProgress: false,
+  targumBg: 'yes', zenProgress: false, zenMinimap: true, zenMinimapPinned: false,
 };
 
 // ---------------------------------------------------------------- state
@@ -423,6 +425,7 @@ async function renderReader(keepScroll, scrollToCV) {
   updateProgressChip();
   updateNavButtons();
   updateScrollProgress();
+  syncMinimap(true);
 }
 
 // how many verses of `verses` are read up to and including (c,v) — used to give a bookmark
@@ -908,6 +911,8 @@ function applyAll() {
   $('setAutoMark').checked = S.autoMark;
   $('setZenProgress').checked = S.zenProgress;
   updateZenProgressVisibility();
+  $('setZenMinimap').checked = S.zenMinimap;
+  updateZenMinimapVisibility();
   $('setReminder').checked = S.reminderOn;
   $('remDay').value = String(S.reminderDay);
   $('remTime').value = S.reminderTime;
@@ -1106,6 +1111,7 @@ function bindSettings() {
   $('setKeepAwake').addEventListener('change', ev => { S.keepAwake = ev.target.checked; saveSettings(); applyKeepAwake(); });
   $('setAutoMark').addEventListener('change', ev => { S.autoMark = ev.target.checked; saveSettings(); });
   $('setZenProgress').addEventListener('change', ev => { S.zenProgress = ev.target.checked; saveSettings(); updateZenProgressVisibility(); });
+  $('setZenMinimap').addEventListener('change', ev => { S.zenMinimap = ev.target.checked; saveSettings(); updateZenMinimapVisibility(); });
   document.querySelectorAll('input[name=font]').forEach(r => r.addEventListener('change', ev => {
     S.font = ev.target.value; saveSettings(); applyAll();
   }));
@@ -1146,9 +1152,101 @@ function toggleZen() {
     if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
   }
   updateZenProgressVisibility();
+  updateZenMinimapVisibility();
 }
 function updateZenProgressVisibility() {
   $('zenProgress').classList.toggle('hidden', !(document.body.classList.contains('zen') && S.zenProgress));
+}
+
+// ---------------------------------------------------------------- zen minimap
+// A "how big is this aliyah, and where am I in it" indicator, shown only in fullscreen
+// (zen) mode: a slim, mostly-transparent bar that blooms — VS Code minimap style — into a
+// shrunk real preview of the whole aliyah with the currently-visible slice highlighted,
+// while it's being dragged or pinned open. Collapsed, it costs nothing visually or
+// perf-wise; expanded, it's rebuilt from a DOM clone so it always matches what's on screen.
+const MINIMAP_MAX_TRACK_RATIO = .72; // cap on how much of the viewport height the thumbnail may fill
+const MINIMAP_COLLAPSE_MS = 2200;    // idle delay before an unpinned expanded minimap collapses back
+let minimapCollapseTimer = 0, minimapDragging = false;
+
+function updateZenMinimapVisibility() {
+  const show = document.body.classList.contains('zen') && S.zenMinimap;
+  $('zenMinimap').classList.toggle('hidden', !show);
+  $('zenMinimapToggle').classList.toggle('hidden', !show);
+  $('zenMinimapToggle').classList.toggle('on', S.zenMinimapPinned);
+  $('zenMinimap').classList.toggle('expanded', show && S.zenMinimapPinned);
+  if (show) syncMinimap(true);
+}
+
+function buildMinimapClone() {
+  const content = $('content');
+  const preview = $('zenMinimapPreview');
+  const clone = content.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  const cs = getComputedStyle(content);
+  clone.style.fontFamily = cs.fontFamily;
+  clone.style.fontSize = cs.fontSize;
+  clone.style.padding = cs.padding;
+  clone.style.width = content.scrollWidth + 'px';
+  preview.innerHTML = '';
+  preview.appendChild(clone);
+}
+
+// recompute the minimap's track height / scale / viewport-highlight box. `rebuild` also
+// refreshes the cloned text preview (needed after content or font-size changes / resize) —
+// skip it on plain scroll, which only has to move the viewport box.
+//
+// the scale is derived from WIDTH only, so glyph shapes stay legible-ish regardless of how
+// tall the aliyah is (some readers use very large font sizes, which makes scrollHeight huge —
+// shrinking scale to force the *whole* thing into a short track would make the preview an
+// invisible hairline). Short aliyot still fit whole in the track at that scale; for long ones
+// (or a big font size) the track is capped and the preview pans to keep the current viewport
+// box centered, same as a real minimap would.
+function syncMinimap(rebuild) {
+  if (!document.body.classList.contains('zen') || !S.zenMinimap) return;
+  const content = $('content');
+  const track = $('zenMinimapTrack');
+  const preview = $('zenMinimapPreview');
+  const viewport = $('zenMinimapViewport');
+  const scrollW = content.scrollWidth || 1;
+  const scrollH = content.scrollHeight || 1;
+  if (rebuild || !preview.firstChild) buildMinimapClone();
+
+  const expandedWidth = window.innerWidth >= 700 ? 76 : 58;
+  const scale = expandedWidth / scrollW;
+  const fullH = scrollH * scale;
+  const maxTrackH = window.innerHeight * MINIMAP_MAX_TRACK_RATIO;
+  const trackH = Math.max(40, Math.round(Math.min(fullH, maxTrackH)));
+
+  const maxScroll = Math.max(1, content.scrollHeight - content.clientHeight);
+  const ratio = Math.min(1, Math.max(0, content.scrollTop / maxScroll));
+  const vpH = Math.max(6, (content.clientHeight / scrollH) * fullH);
+  const vpTopFull = ratio * (fullH - vpH);
+  const pan = fullH <= trackH ? 0 : Math.min(fullH - trackH, Math.max(0, vpTopFull + vpH / 2 - trackH / 2));
+
+  track.style.height = trackH + 'px';
+  preview.style.transform = `translateY(${-pan}px) scale(${scale})`;
+  preview.style.width = scrollW + 'px';
+  preview.style.height = scrollH + 'px';
+  viewport.style.height = Math.round(vpH) + 'px';
+  viewport.style.top = Math.round(vpTopFull - pan) + 'px';
+}
+
+function expandMinimap(temporary) {
+  $('zenMinimap').classList.add('expanded');
+  clearTimeout(minimapCollapseTimer);
+  if (temporary && !S.zenMinimapPinned) {
+    minimapCollapseTimer = setTimeout(() => {
+      if (!minimapDragging) $('zenMinimap').classList.toggle('expanded', S.zenMinimapPinned);
+    }, MINIMAP_COLLAPSE_MS);
+  }
+}
+
+function minimapScrubTo(clientY) {
+  const rect = $('zenMinimapTrack').getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
+  const content = $('content');
+  content.scrollTop = ratio * (content.scrollHeight - content.clientHeight);
 }
 
 function bindUI() {
@@ -1197,6 +1295,29 @@ function bindUI() {
   $('btnBookmark').addEventListener('click', goToBookmark);
   $('btnZen').addEventListener('click', toggleZen);
   $('zenExit').addEventListener('click', toggleZen);
+  $('zenMinimapToggle').addEventListener('click', () => {
+    S.zenMinimapPinned = !S.zenMinimapPinned;
+    saveSettings();
+    $('zenMinimapToggle').classList.toggle('on', S.zenMinimapPinned);
+    if (S.zenMinimapPinned) expandMinimap(false);
+    else $('zenMinimap').classList.remove('expanded');
+  });
+  $('zenMinimapTrack').addEventListener('pointerdown', ev => {
+    minimapDragging = true;
+    try { $('zenMinimapTrack').setPointerCapture(ev.pointerId); } catch (e) {}
+    expandMinimap(true);
+    minimapScrubTo(ev.clientY);
+  });
+  $('zenMinimapTrack').addEventListener('pointermove', ev => {
+    if (!minimapDragging) return;
+    minimapScrubTo(ev.clientY);
+  });
+  window.addEventListener('pointerup', () => {
+    if (!minimapDragging) return;
+    minimapDragging = false;
+    expandMinimap(true);
+  });
+  window.addEventListener('resize', () => syncMinimap(true));
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     S.viewFilter = b.dataset.vf;
     saveSettings(); applyAll(); renderReader(true);
@@ -1205,6 +1326,7 @@ function bindUI() {
   let scrollT = 0;
   $('content').addEventListener('scroll', () => {
     updateScrollProgress();
+    syncMinimap();
     clearTimeout(scrollT);
     scrollT = setTimeout(() => {
       pos.scroll = $('content').scrollTop;
