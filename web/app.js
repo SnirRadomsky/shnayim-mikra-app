@@ -63,6 +63,7 @@ const STR = {
     bookmarkRemoved: 'הסימניה הוסרה', bookmarkLabel: 'סימניה', versesWord: 'פסוקים',
     zenProgressBar: 'הצג פס התקדמות במסך מלא',
     zenMinimapLabel: 'הצג מפת גודל עלייה במסך מלא',
+    zenMinimapWholeLabel: 'הצג בה את כל העלייה (גם אם הטקסט יהיה קטן מאוד)',
     parashaSizeShort: 'פרשה קצרה', parashaSizeMedium: 'פרשה בינונית', parashaSizeLong: 'פרשה ארוכה',
   },
   en: {
@@ -105,6 +106,7 @@ const STR = {
     bookmarkRemoved: 'Bookmark removed', bookmarkLabel: 'Bookmark', versesWord: 'verses',
     zenProgressBar: 'Show progress bar in fullscreen',
     zenMinimapLabel: 'Show aliyah-size map in fullscreen',
+    zenMinimapWholeLabel: 'Show the whole aliyah in it (even if the text gets very small)',
     parashaSizeShort: 'Short parasha', parashaSizeMedium: 'Medium parasha', parashaSizeLong: 'Long parasha',
   },
 };
@@ -117,6 +119,7 @@ const DEFAULTS = {
   font: 'frank', scrollbar: 'yes', autoAdvance: 'yes',
   dailyPlan: false, keepAwake: true, autoMark: true, viewFilter: 'all',
   targumBg: 'yes', zenProgress: false, zenMinimap: true, zenMinimapPinned: false,
+  zenMinimapWhole: false,
 };
 
 // ---------------------------------------------------------------- state
@@ -912,6 +915,7 @@ function applyAll() {
   $('setZenProgress').checked = S.zenProgress;
   updateZenProgressVisibility();
   $('setZenMinimap').checked = S.zenMinimap;
+  $('setZenMinimapWhole').checked = S.zenMinimapWhole;
   updateZenMinimapVisibility();
   $('setReminder').checked = S.reminderOn;
   $('remDay').value = String(S.reminderDay);
@@ -1112,6 +1116,7 @@ function bindSettings() {
   $('setAutoMark').addEventListener('change', ev => { S.autoMark = ev.target.checked; saveSettings(); });
   $('setZenProgress').addEventListener('change', ev => { S.zenProgress = ev.target.checked; saveSettings(); updateZenProgressVisibility(); });
   $('setZenMinimap').addEventListener('change', ev => { S.zenMinimap = ev.target.checked; saveSettings(); updateZenMinimapVisibility(); });
+  $('setZenMinimapWhole').addEventListener('change', ev => { S.zenMinimapWhole = ev.target.checked; saveSettings(); syncMinimap(); });
   document.querySelectorAll('input[name=font]').forEach(r => r.addEventListener('change', ev => {
     S.font = ev.target.value; saveSettings(); applyAll();
   }));
@@ -1196,12 +1201,14 @@ function buildMinimapClone() {
 // refreshes the cloned text preview (needed after content or font-size changes / resize) —
 // skip it on plain scroll, which only has to move the viewport box.
 //
-// the scale is derived from WIDTH only, so glyph shapes stay legible-ish regardless of how
-// tall the aliyah is (some readers use very large font sizes, which makes scrollHeight huge —
-// shrinking scale to force the *whole* thing into a short track would make the preview an
-// invisible hairline). Short aliyot still fit whole in the track at that scale; for long ones
-// (or a big font size) the track is capped and the preview pans to keep the current viewport
-// box centered, same as a real minimap would.
+// by default the scale is derived from WIDTH only, so glyph shapes stay legible-ish
+// regardless of how tall the aliyah is (some readers use very large font sizes, which makes
+// scrollHeight huge — shrinking scale to force the *whole* thing into a short track would
+// make the preview an invisible hairline). Short aliyot still fit whole in the track at that
+// scale; for long ones (or a big font size) the track is capped and the preview pans to keep
+// the current viewport box centered, same as a real minimap would. S.zenMinimapWhole opts out
+// of panning: it shrinks the scale as far as needed to always show the whole aliyah at once,
+// even if that makes the text unreadably small.
 function syncMinimap(rebuild) {
   if (!document.body.classList.contains('zen') || !S.zenMinimap) return;
   const content = $('content');
@@ -1213,9 +1220,9 @@ function syncMinimap(rebuild) {
   if (rebuild || !preview.firstChild) buildMinimapClone();
 
   const expandedWidth = window.innerWidth >= 700 ? 76 : 58;
-  const scale = expandedWidth / scrollW;
-  const fullH = scrollH * scale;
   const maxTrackH = window.innerHeight * MINIMAP_MAX_TRACK_RATIO;
+  const scale = S.zenMinimapWhole ? Math.min(expandedWidth / scrollW, maxTrackH / scrollH) : expandedWidth / scrollW;
+  const fullH = scrollH * scale;
   const trackH = Math.max(40, Math.round(Math.min(fullH, maxTrackH)));
 
   const maxScroll = Math.max(1, content.scrollHeight - content.clientHeight);
