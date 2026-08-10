@@ -57,7 +57,9 @@ class MainActivity : ComponentActivity() {
                 builtInZoomControls = false
             }
             addJavascriptInterface(Bridge(), "SMNative")
-            isVerticalScrollBarEnabled = true
+            // the web app now draws its own scroll-position indicator (the zen minimap);
+            // the native overlay scrollbar just duplicated it at the same edge.
+            isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             loadUrl(APP_URL)
         }
