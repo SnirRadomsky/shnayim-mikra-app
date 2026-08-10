@@ -74,7 +74,8 @@
 <aside id="sideMenu" class="hidden">
   <div class="menuhead">שניים מקרא ואחד תרגום</div>
   <button class="menuitem" id="miToday">📖 <span data-i18n="menuToday">לפרשת השבוע</span></button>
-  <button class="menuitem" id="miProgress">✅ <span data-i18n="menuProgress">התקדמות</span></button>
+  <button class="menuitem" id="miProgress">✅ <span data-i18n="menuProgress">התקדמות השבוע</span></button>
+  <button class="menuitem" id="miProgressGeneral">📊 <span data-i18n="menuProgressGeneral">התקדמות כללית</span></button>
   <button class="menuitem" id="miBookmarkGo">🔖 <span data-i18n="menuBookmark">עבור לסימניה</span></button>
   <button class="menuitem" id="miFontUp">🔍 <span data-i18n="menuFontUp">הגדל כתב</span></button>
   <button class="menuitem" id="miFontDown">🔎 <span data-i18n="menuFontDown">הקטן כתב</span></button>
@@ -264,13 +265,22 @@
   </div>
 </section>
 
-<!-- ===================== PROGRESS ===================== -->
+<!-- ===================== PROGRESS (this week's parasha) ===================== -->
 <section id="progressPage" class="page hidden">
   <header class="pagehead">
     <button class="iconbtn pageback" data-close="progressPage">←</button>
-    <h2 data-i18n="progress">התקדמות</h2>
+    <h2 data-i18n="progress">התקדמות השבוע</h2>
   </header>
   <div class="pagebody" id="progressBody"></div>
+</section>
+
+<!-- ===================== PROGRESS (overall / across weeks) ===================== -->
+<section id="progressGeneralPage" class="page hidden">
+  <header class="pagehead">
+    <button class="iconbtn pageback" data-close="progressGeneralPage">←</button>
+    <h2 data-i18n="progressGeneral">התקדמות כללית</h2>
+  </header>
+  <div class="pagebody" id="progressGeneralBody"></div>
 </section>
 
 <!-- ===================== PARSHA PICKER ===================== -->

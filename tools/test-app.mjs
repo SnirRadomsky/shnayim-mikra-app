@@ -134,28 +134,36 @@ await page.click('[data-close=pickerModal]');
 await page.click('#btnMenu'); await page.click('#miToday');
 await page.waitForFunction(() => document.getElementById('parshaName').textContent.includes('מַטּוֹת'));
 
-console.log('== 5. progress: done button, chip, progress page ==');
+console.log('== 5. progress: done button, chip, weekly progress page ==');
 let chip = await page.textContent('#progressChip');
 check('chip starts 0%', chip === '0%', chip);
 await page.$eval('#btnAliyahDone', el => el.scrollIntoView());
 await page.click('#btnAliyahDone');
 await page.waitForFunction(() => document.getElementById('aliyahName').textContent.trim() === 'שני');
 check('done -> advances to sheni', true);
+await page.waitForTimeout(300); // chip % is now computed async from real verse counts
 chip = await page.textContent('#progressChip');
-check('chip 13% after 1/8', chip === '13%', chip);
+check('chip ~11% after rishon done (28/244 verses, not a flat 1/7)', chip === '11%', chip);
 await page.click('#btnMenu'); await page.click('#miProgress');
-await page.waitForSelector('.alcell');
-const cells = await page.$$eval('.alcell', els => els.map(e => ({ txt: e.textContent, done: e.classList.contains('done') })));
-check('8 aliyah cells, rishon done', cells.length === 8 && cells[0].done && !cells[1].done, cells.map(c => c.done));
-// toggle sheni via grid
-await page.click('.alcell[data-al="1"]');
-const streak = await page.$eval('.progstats .statbox .n', el => el.textContent);
-check('streak box renders', /^\d+$/.test(streak), streak);
-await page.waitForFunction(() => /^\d+$/.test(document.getElementById('versesLeftN').textContent));
-const vl = await page.$eval('#versesLeftN', el => +el.textContent);
+await page.waitForSelector('.alrow');
+const rows = await page.$$eval('.alrow', els => els.map(e => ({ txt: e.textContent, done: e.classList.contains('done') })));
+check('7 aliyah rows (haftara setting is off), rishon done', rows.length === 7 && rows[0].done && !rows[1].done, rows.map(c => c.done));
+check('weekly progress page has an overall ring, no Gregorian date', await page.$('#progRingPct') !== null && !/\d\d\.\d\d\.\d\d/.test(await page.textContent('#progressBody')));
+// toggle sheni via row click
+await page.click('.alrow[data-al="1"]');
+await page.waitForTimeout(300);
+const vl = parseInt(await page.textContent('#versesLeftN'), 10);
 check('verses-left computed (Matot-Masei total 244, minus rishon 28 & sheni 42 = 174)', vl === 174, vl);
 await page.screenshot({ path: SHOTS + '/05-progress.png' });
 await page.click('#progressPage .pageback');
+
+console.log('== 5b. general progress page (streak/history moved out of the weekly view) ==');
+await page.click('#btnMenu'); await page.click('#miProgressGeneral');
+await page.waitForSelector('.progstats');
+const streak = await page.$eval('.progstats .statbox .n', el => el.textContent);
+check('streak box renders', /^\d+$/.test(streak), streak);
+check('general page has no per-aliyah rows', await page.$('#progressGeneralBody .alrow') === null);
+await page.click('#progressGeneralPage .pageback');
 
 console.log('== 6. auto-scroll ==');
 const st0 = await page.$eval('#content', el => el.scrollTop);
