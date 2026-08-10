@@ -178,22 +178,41 @@ check('speed increments', +(await page.textContent('#speedVal')) === +sp0 + 1);
 
 console.log('== 7. colors / theme / font / filters ==');
 await page.click('#btnMenu'); await page.click('#miSettings');
-await page.$eval('#colOnkelos', el => { el.value = '#cc0000'; el.dispatchEvent(new Event('input')); });
+// custom color picker (replaces the old native <input type=color>)
+await page.click('#colOnkelos');
+await page.waitForSelector('#colorPickerModal:not(.hidden)');
+await page.fill('#cpHex', '#cc0000');
+await page.dispatchEvent('#cpHex', 'change');
+await page.click('[data-close=colorPickerModal]');
+const swatchBg = await page.$eval('#colOnkelos', el => getComputedStyle(el).backgroundColor);
+check('color picker swatch shows chosen color', swatchBg === 'rgb(204, 0, 0)', swatchBg);
 await page.click('.pageback');
 const tCol = await page.$eval('.verse .targum', el => getComputedStyle(el).color);
 check('onkelos custom color applied', tCol === 'rgb(204, 0, 0)', tCol);
+// recent colors: the color just picked should now appear in the swatch row
 await page.click('#btnMenu'); await page.click('#miSettings');
-await page.click('#btnResetColors');
+await page.click('#colOnkelos');
+await page.waitForSelector('#colorPickerModal:not(.hidden)');
+const recentHexes = await page.$$eval('.cpRecentSwatch', els => els.map(e => e.dataset.hex.toLowerCase()));
+check('recent colors remembers last pick', recentHexes.includes('#cc0000'), recentHexes);
+await page.click('[data-close=colorPickerModal]');
 await page.click('.pageback');
-const tCol2 = await page.$eval('.verse .targum', el => getComputedStyle(el).color);
-check('original colors restored', tCol2 !== 'rgb(204, 0, 0)', tCol2);
 
 await page.click('#btnMenu'); await page.click('#miSettings');
 await page.click('#segTheme [data-val=dark]');
 const darkBg = await page.$eval('body', el => getComputedStyle(el).backgroundColor);
 check('dark theme applied', darkBg === 'rgb(16, 17, 22)', darkBg);
+// the light-theme custom onkelos color must NOT leak into dark theme (this used to make
+// mikra2/targum invisible if a dark color was picked while in light mode)
+const tColDark = await page.$eval('.verse .targum', el => getComputedStyle(el).color);
+check('custom light-theme color does not leak into dark theme', tColDark !== 'rgb(204, 0, 0)', tColDark);
 await page.screenshot({ path: SHOTS + '/06-settings-dark.png' });
 await page.click('#segTheme [data-val=light]');
+const tColBack = await page.$eval('.verse .targum', el => getComputedStyle(el).color);
+check('light-theme custom color still applied after switching back', tColBack === 'rgb(204, 0, 0)', tColBack);
+await page.click('#btnResetColors');
+const tCol2 = await page.$eval('.verse .targum', el => getComputedStyle(el).color);
+check('original colors restored', tCol2 !== 'rgb(204, 0, 0)', tCol2);
 await page.check('input[name=font][value=ezra]');
 await page.click('.pageback');
 const fontFam = await page.$eval('#content', el => getComputedStyle(el).fontFamily);

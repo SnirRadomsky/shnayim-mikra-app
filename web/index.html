@@ -45,6 +45,9 @@
     </div>
     <button id="btnBookmark" class="iconbtn" title="סימניה">🔖</button>
   </div>
+  <div id="aliyahSizeBar" class="aliyahsizebar"></div>
+
+  <div id="zenProgress" class="zenprogress hidden"><div id="zenProgressFill" class="zenprogressfill"></div></div>
 
   <main id="content" tabindex="0"></main>
 
@@ -65,6 +68,7 @@
   </div>
 
   <button id="zenExit" class="hidden" aria-label="יציאה ממסך מלא">✕</button>
+  <button id="zenPlayBtn" class="hidden zenplaybtn" aria-label="הפעל/עצור גלילה אוטומטית">▶</button>
 </div>
 
 <!-- ===================== SIDE MENU ===================== -->
@@ -173,26 +177,22 @@
       <div class="colorrow">
         <span data-i18n="onkelosC">אונקולוס:</span>
         <span class="colorsample targum-sample" id="sampleOnkelos">בְּקַדְמִין בְּרָא</span>
-        <input type="color" id="colOnkelos" class="colorpick" title="שנה צבע" list="swatchOnkelos" dir="ltr">
-        <datalist id="swatchOnkelos"><option value="#275079"></option></datalist>
+        <button type="button" id="colOnkelos" class="colorpick" title="שנה צבע" aria-label="שנה צבע" dir="ltr"></button>
       </div>
       <div class="colorrow">
         <span data-i18n="rashiC">רש"י:</span>
         <span class="colorsample rashi-sample" id="sampleRashi">בראשית ברא</span>
-        <input type="color" id="colRashi" class="colorpick" title="שנה צבע" list="swatchRashi" dir="ltr">
-        <datalist id="swatchRashi"><option value="#6a4a1f"></option></datalist>
+        <button type="button" id="colRashi" class="colorpick" title="שנה צבע" aria-label="שנה צבע" dir="ltr"></button>
       </div>
       <div class="colorrow">
         <span data-i18n="mikraC">מקרא:</span>
         <span class="colorsample mikra-sample" id="sampleMikra">בְּרֵאשִׁ֖ית</span>
-        <input type="color" id="colMikra" class="colorpick" title="שנה צבע" list="swatchMikra" dir="ltr">
-        <datalist id="swatchMikra"><option value="#16161a"></option></datalist>
+        <button type="button" id="colMikra" class="colorpick" title="שנה צבע" aria-label="שנה צבע" dir="ltr"></button>
       </div>
       <div class="colorrow">
         <span data-i18n="mikra2C">מקרא (פעם ב׳):</span>
         <span class="colorsample mikra2-sample" id="sampleMikra2">בְּרֵאשִׁ֖ית</span>
-        <input type="color" id="colMikra2" class="colorpick" title="שנה צבע" list="swatchMikra2" dir="ltr">
-        <datalist id="swatchMikra2"><option value="#3d5a80"></option></datalist>
+        <button type="button" id="colMikra2" class="colorpick" title="שנה צבע" aria-label="שנה צבע" dir="ltr"></button>
       </div>
       <button id="btnResetColors" class="outlinebtn" data-i18n="origColors">צבעים מקוריים</button>
     </div>
@@ -244,6 +244,7 @@
         <button data-val="yes" data-i18n="yes">כן</button>
         <button data-val="no" data-i18n="no">לא</button>
       </div>
+      <label class="setrow" style="margin-top:10px;"><span data-i18n="zenProgressBar">הצג פס התקדמות במסך מלא</span><input type="checkbox" id="setZenProgress" class="tgl"></label>
     </div>
 
     <div class="setgroup">
@@ -280,6 +281,21 @@
     <h3 data-i18n="chooseParsha">בחר פרשה</h3>
     <div id="pickerList"></div>
     <button class="outlinebtn" data-close="pickerModal" data-i18n="close">סגור</button>
+  </div>
+</div>
+
+<!-- ===================== COLOR PICKER ===================== -->
+<div id="colorPickerModal" class="modal hidden">
+  <div class="modalbox" dir="ltr">
+    <h3 id="cpTitle">—</h3>
+    <div class="cpSquare" id="cpSquare"><div class="cpSquareThumb" id="cpSquareThumb"></div></div>
+    <div class="cpHue" id="cpHue"><div class="cpHueThumb" id="cpHueThumb"></div></div>
+    <div class="cpPreviewRow">
+      <span class="cpPreview" id="cpPreview"></span>
+      <input type="text" id="cpHex" class="cpHexInput" maxlength="7" spellcheck="false">
+    </div>
+    <div class="cpRecentRow" id="cpRecentRow"></div>
+    <button class="outlinebtn" data-close="colorPickerModal" data-i18n="close">סגור</button>
   </div>
 </div>
 

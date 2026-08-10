@@ -7,6 +7,8 @@
 // ---------------------------------------------------------------- constants
 const ALIYAH_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שביעי', 'הפטרה'];
 const ALIYAH_EN = ['Rishon', 'Sheni', 'Shlishi', "Revi'i", 'Chamishi', 'Shishi', "Shvi'i", 'Haftarah'];
+// "עלייה" is feminine, so "end of aliyah" needs the feminine ordinal form (שלישית, not שלישי)
+const ALIYAH_HE_FEM = ['ראשונה', 'שנייה', 'שלישית', 'רביעית', 'חמישית', 'שישית', 'שביעית'];
 const BOOK_HE = {
   Genesis: 'בראשית', Exodus: 'שמות', Leviticus: 'ויקרא', Numbers: 'במדבר', Deuteronomy: 'דברים',
   Joshua: 'יהושע', Judges: 'שופטים', 'I Samuel': 'שמואל א', 'II Samuel': 'שמואל ב',
@@ -55,7 +57,8 @@ const STR = {
     endOfAliyah: 'סוף עלייה', notifNA: 'התראות זמינות רק באפליקציה',
     targumBg: 'רקע לתרגום', mikra2C: 'מקרא (פעם ב\'):', menuTeamim: 'שמות הטעמים',
     lastVerseRepeat: 'חזרת הפסוק האחרון', bookmarkAdded: 'הסימניה נוספה',
-    bookmarkRemoved: 'הסימניה הוסרה',
+    bookmarkRemoved: 'הסימניה הוסרה', bookmarkLabel: 'סימניה', versesWord: 'פסוקים',
+    zenProgressBar: 'הצג פס התקדמות במסך מלא',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -94,23 +97,32 @@ const STR = {
     endOfAliyah: 'End of aliyah', notifNA: 'Notifications are available only in the app',
     targumBg: 'Targum background', mikra2C: 'Mikra (2nd time):', menuTeamim: "Te'amim names",
     lastVerseRepeat: 'Repeat of the last verse', bookmarkAdded: 'Bookmark added',
-    bookmarkRemoved: 'Bookmark removed',
+    bookmarkRemoved: 'Bookmark removed', bookmarkLabel: 'Bookmark', versesWord: 'verses',
+    zenProgressBar: 'Show progress bar in fullscreen',
   },
 };
 
 const DEFAULTS = {
   onkelos: true, rashi: false, fontSize: 54, speed: 55, mode: 'pasuk',
   teamim: 'with', haftara: 'without', minhag: 'seph', twice: 'twice', lang: 'he',
-  colors: {}, theme: 'light', loc: 'il',
+  colors: { light: {}, dark: {}, sepia: {} }, theme: 'light', loc: 'il',
   reminderOn: false, reminderDay: 4, reminderTime: '20:00',
   font: 'frank', scrollbar: 'yes', autoAdvance: 'yes',
   dailyPlan: false, keepAwake: true, autoMark: true, viewFilter: 'all',
-  targumBg: 'yes',
+  targumBg: 'yes', zenProgress: false,
 };
 
 // ---------------------------------------------------------------- state
 let S = loadJSON('sm_settings', {});
 S = Object.assign({}, DEFAULTS, S);
+// colors used to be one flat set shared by every theme, which caused dark-mode text to
+// become invisible if a dark-ish color was picked while in light theme (it "stuck" across
+// themes). Migrate any old flat shape into a per-theme {light,dark,sepia} structure.
+if (S.colors && !S.colors.light && !S.colors.dark && !S.colors.sepia) {
+  S.colors = { light: S.colors, dark: {}, sepia: {} };
+} else {
+  S.colors = Object.assign({ light: {}, dark: {}, sepia: {} }, S.colors);
+}
 let PARSHIYOT = null, SCHEDULE = null, HAFTAROT = null;
 const bookCache = {};
 let pos = loadJSON('sm_pos', null);       // {loc, idx, aliyah, scroll}
@@ -154,11 +166,20 @@ function toggleVerseBookmark(c, v) {
     bookmarks.splice(i, 1);
     toast(t('bookmarkRemoved'));
   } else {
-    bookmarks = [{ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now() }];
-    toast(t('bookmarkAdded'));
+    const el = $('content');
+    const max = el.scrollHeight - el.clientHeight;
+    const pct = max > 0 ? Math.round(Math.min(100, Math.max(0, (el.scrollTop / max) * 100))) : 0;
+    bookmarks = [{ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now(), pct }];
+    toast(`${t('bookmarkAdded')} · ${pct}%`);
   }
   saveBookmarks();
   renderReader(true);
+}
+function bookmarkRibbonHTML(c, v) {
+  const i = findBookmark(c, v);
+  if (i < 0) return '';
+  const pct = typeof bookmarks[i].pct === 'number' ? ` · ${bookmarks[i].pct}%` : '';
+  return `<span class="bmRibbon">🔖 ${t('bookmarkLabel')}${pct}</span>`;
 }
 function t(key, vars) {
   let s = (STR[S.lang] && STR[S.lang][key]) || STR.he[key] || key;
@@ -265,6 +286,7 @@ function mikraHTML(vd, cls) {
 function verseBlockHTML(vd, showMikra, showTargum) {
   const marked = isVerseBookmarked(vd.c, vd.v);
   let h = `<div class="verse${marked ? ' bookmarked' : ''}" data-cv="${vd.c}:${vd.v}">`;
+  if (marked) h += bookmarkRibbonHTML(vd.c, vd.v);
   h += `<span class="vnum">${gematria(vd.v)}</span>`;
   const parts = [];
   if (showMikra) {
@@ -304,19 +326,20 @@ function renderAliyahMode(verses, showMikra, showTargum) {
       }
       const marked = isVerseBookmarked(vd.c, vd.v);
       const cls = 'verse' + (marked ? ' bookmarked' : '');
+      const ribbon = marked ? bookmarkRibbonHTML(vd.c, vd.v) : '';
       if (pass.type === 'm1' || pass.type === 'm2') {
-        h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}"><span class="vnum">${gematria(vd.v)}</span>${mikraHTML(vd, pass.type === 'm1' ? 'mikra' : 'mikra2')}</div>`;
+        h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}">${ribbon}<span class="vnum">${gematria(vd.v)}</span>${mikraHTML(vd, pass.type === 'm1' ? 'mikra' : 'mikra2')}</div>`;
       } else if (pass.type === 't') {
-        if (vd.t) h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}"><span class="vnum">${gematria(vd.v)}</span><span class="targum">${esc(vd.t)}</span></div>`;
+        if (vd.t) h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}">${ribbon}<span class="vnum">${gematria(vd.v)}</span><span class="targum">${esc(vd.t)}</span></div>`;
       } else {
-        h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}"><span class="vnum">${gematria(vd.v)}</span></div><div class="rashi">${vd.r.map(sanitizeRashi).join('<br>')}</div>`;
+        h += `<div class="${cls}" data-cv="${vd.c}:${vd.v}">${ribbon}<span class="vnum">${gematria(vd.v)}</span></div><div class="rashi">${vd.r.map(sanitizeRashi).join('<br>')}</div>`;
       }
     }
   }
   return h;
 }
 
-async function renderReader(keepScroll) {
+async function renderReader(keepScroll, scrollToCV) {
   const seq = ++renderSeq;
   const content = $('content');
   const m = meta();
@@ -379,15 +402,29 @@ async function renderReader(keepScroll) {
   const done = progOf(e).a[pos.aliyah];
   html += `<button class="aliyahDone${done ? ' done' : ''}" id="btnAliyahDone">${
     done ? t('aliyahDoneAlready') : (pos.aliyah === 7 ? t('doneHaftara') : t('doneAliyah'))}</button>`;
-  html += `<div class="endnote">${t('endOfAliyah')} · ${m.he}</div>`;
+  const endLabel = pos.aliyah === 7
+    ? (S.lang === 'he' ? 'סוף ההפטרה' : 'End of the Haftarah')
+    : (S.lang === 'he' ? `${t('endOfAliyah')} ${ALIYAH_HE_FEM[pos.aliyah]}` : `${t('endOfAliyah')} (${ALIYAH_EN[pos.aliyah]})`);
+  html += `<div class="endnote">${endLabel} · ${m.he}</div>`;
 
   content.innerHTML = html;
   $('btnAliyahDone').addEventListener('click', onAliyahDone);
-  content.scrollTop = keepScroll ? (pos.scroll || 0) : 0;
-  if (!keepScroll) { pos.scroll = 0; savePos(); }
+  // when jumping to a specific verse (e.g. a bookmark), scroll to it in this same
+  // synchronous pass — never paint an intermediate scrollTop:0 frame first, which is
+  // what used to cause a visible "jump" back to the top of the aliyah before landing.
+  const target = scrollToCV && content.querySelector(`.verse[data-cv="${scrollToCV}"]`);
+  if (target) {
+    target.scrollIntoView({ block: 'center' });
+    pos.scroll = content.scrollTop;
+  } else {
+    content.scrollTop = keepScroll ? (pos.scroll || 0) : 0;
+    if (!keepScroll) pos.scroll = 0;
+  }
+  savePos();
   updateProgressChip();
   updateNavButtons();
   updateScrollProgress();
+  updateAliyahSizeBar();
 }
 
 function updateProgressChip() {
@@ -404,6 +441,31 @@ function updateScrollProgress() {
   const max = c.scrollHeight - c.clientHeight;
   const pct = max > 0 ? Math.min(100, Math.max(0, (c.scrollTop / max) * 100)) : 0;
   $('scrollProgressFill').style.width = pct + '%';
+  $('zenProgressFill').style.width = pct + '%';
+}
+
+// shows the 7 aliyot as segments sized by their relative verse count, so the reader can see
+// at a glance how long the current aliyah is compared to the rest of the parasha (not just %)
+async function updateAliyahSizeBar() {
+  const bar = $('aliyahSizeBar');
+  if (pos.aliyah === 7) { bar.innerHTML = ''; return; }
+  const m = meta();
+  const bd = await loadBook(m.book);
+  if (meta() !== m) return; // parasha changed while we were awaiting
+  const names = S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN;
+  const counts = [];
+  let total = 0;
+  for (let i = 0; i < 7; i++) {
+    const c = versesForRange(bd, m.aliyot[i]).length;
+    counts.push(c);
+    total += c;
+  }
+  let h = '';
+  for (let i = 0; i < 7; i++) {
+    const pct = total ? (counts[i] / total * 100) : (100 / 7);
+    h += `<div class="aliyahseg${i === pos.aliyah ? ' current' : ''}" style="width:${pct}%" title="${names[i]}: ${counts[i]}"></div>`;
+  }
+  bar.innerHTML = h;
 }
 
 function updateNavButtons() {
@@ -469,10 +531,16 @@ function markAliyahDoneQuiet() {
 
 // ---------------------------------------------------------------- auto scroll
 function pxPerSec() { return 6 + S.speed * 1.8; }
+function setPlayButtonsState(playing) {
+  [$('btnPlay'), $('zenPlayBtn')].forEach(b => {
+    if (!b) return;
+    b.textContent = playing ? '❚❚' : '▶';
+    b.classList.toggle('playing', playing);
+  });
+}
 function startAutoScroll() {
   scrolling = true;
-  $('btnPlay').textContent = '❚❚';
-  $('btnPlay').classList.add('playing');
+  setPlayButtonsState(true);
   lastTs = 0; scrollRemainder = 0;
   const step = ts => {
     if (!scrolling) return;
@@ -499,8 +567,7 @@ function startAutoScroll() {
 function stopAutoScroll() {
   scrolling = false;
   cancelAnimationFrame(scrollRAF);
-  const b = $('btnPlay');
-  if (b) { b.textContent = '▶'; b.classList.remove('playing'); }
+  setPlayButtonsState(false);
 }
 function setSpeed(v) {
   S.speed = Math.max(1, Math.min(100, v));
@@ -520,7 +587,8 @@ function renderProgress() {
 
   let cells = '';
   for (let i = 0; i < n; i++) {
-    cells += `<button class="alcell${p.a[i] ? ' done' : ''}" data-al="${i}">${names[i]}${p.a[i] ? ' ✓' : ''}</button>`;
+    cells += `<button class="alcell${p.a[i] ? ' done' : ''}" data-al="${i}">
+      <span class="alname">${names[i]}${p.a[i] ? ' ✓' : ''}</span><span class="alverses" data-alverses="${i}"></span></button>`;
   }
 
   // streak: consecutive fully-read weeks before (and including) current week
@@ -571,13 +639,27 @@ function renderProgress() {
     updateProgressChip();
   }));
 
-  // verses left (async: needs book)
+  // verse counts per aliyah + verses left (async: needs book)
   loadBook(m.book).then(bd => {
     let left = 0;
-    for (let i = 0; i < 7; i++) if (!p.a[i]) left += versesForRange(bd, m.aliyot[i]).length;
+    for (let i = 0; i < 7; i++) {
+      const count = versesForRange(bd, m.aliyot[i]).length;
+      if (!p.a[i]) left += count;
+      const cEl = body.querySelector(`[data-alverses="${i}"]`);
+      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
+    }
     const el = $('versesLeftN');
     if (el) el.textContent = left;
   }).catch(() => {});
+  if (n === 8) {
+    loadHaftarot().then(haft => {
+      const hd = haft[e[1]];
+      const segs = (S.minhag === 'ashk' ? hd.a : hd.s) || [];
+      const count = segs.reduce((sum, seg) => sum + seg.verses.length, 0);
+      const cEl = body.querySelector('[data-alverses="7"]');
+      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
+    }).catch(() => {});
+  }
 }
 function fullyDone(e) {
   const pr = progress[progKey(e)];
@@ -657,16 +739,15 @@ function bindSeg(id, key, after) {
   }));
 }
 
-// apply the custom color overrides only (CSS vars + sample swatch text) — deliberately
-// does NOT touch the <input type=color> .value attributes, so it's safe to call while
-// the user is actively dragging inside one of those pickers (reassigning .value mid-drag
-// can confuse the native color-picker UI and make it appear stuck on black).
+// apply the current theme's color overrides as CSS vars (live, e.g. while dragging in
+// the custom color picker below) without touching anything else in the DOM.
 function applyColorVars() {
+  const c = S.colors[S.theme] || (S.colors[S.theme] = {});
   const root = document.documentElement.style;
-  if (S.colors.targum) root.setProperty('--targum', S.colors.targum); else root.removeProperty('--targum');
-  if (S.colors.rashi) root.setProperty('--rashi', S.colors.rashi); else root.removeProperty('--rashi');
-  if (S.colors.mikra) { root.setProperty('--mikra', S.colors.mikra); } else root.removeProperty('--mikra');
-  if (S.colors.mikra2) { root.setProperty('--mikra2', S.colors.mikra2); } else root.removeProperty('--mikra2');
+  if (c.targum) root.setProperty('--targum', c.targum); else root.removeProperty('--targum');
+  if (c.rashi) root.setProperty('--rashi', c.rashi); else root.removeProperty('--rashi');
+  if (c.mikra) { root.setProperty('--mikra', c.mikra); } else root.removeProperty('--mikra');
+  if (c.mikra2) { root.setProperty('--mikra2', c.mikra2); } else root.removeProperty('--mikra2');
 }
 
 function applyAll() {
@@ -692,6 +773,8 @@ function applyAll() {
   $('setDailyPlan').checked = S.dailyPlan;
   $('setKeepAwake').checked = S.keepAwake;
   $('setAutoMark').checked = S.autoMark;
+  $('setZenProgress').checked = S.zenProgress;
+  updateZenProgressVisibility();
   $('setReminder').checked = S.reminderOn;
   $('remDay').value = String(S.reminderDay);
   $('remTime').value = S.reminderTime;
@@ -699,10 +782,11 @@ function applyAll() {
   const radio = document.querySelector(`input[name=font][value=${S.font}]`);
   if (radio) radio.checked = true;
   const getVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  $('colOnkelos').value = S.colors.targum || rgbToHex(getVar('--targum')) || '#275079';
-  $('colRashi').value = S.colors.rashi || rgbToHex(getVar('--rashi')) || '#6a4a1f';
-  $('colMikra').value = S.colors.mikra || rgbToHex(getVar('--mikra')) || '#16161a';
-  $('colMikra2').value = S.colors.mikra2 || rgbToHex(getVar('--mikra2')) || '#3d5a80';
+  const cc = S.colors[S.theme] || {};
+  $('colOnkelos').style.background = cc.targum || rgbToHex(getVar('--targum')) || '#275079';
+  $('colRashi').style.background = cc.rashi || rgbToHex(getVar('--rashi')) || '#6a4a1f';
+  $('colMikra').style.background = cc.mikra || rgbToHex(getVar('--mikra')) || '#16161a';
+  $('colMikra2').style.background = cc.mikra2 || rgbToHex(getVar('--mikra2')) || '#3d5a80';
   $('viewFilter').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.vf === S.viewFilter));
   $('viewFilter').querySelector('[data-vf=all]').textContent = t('all');
   $('viewFilter').querySelector('[data-vf=mikra]').textContent = t('mikraOnly');
@@ -715,6 +799,144 @@ function rgbToHex(c) {
   const m = c.match(/(\d+),\s*(\d+),\s*(\d+)/);
   if (!m) return null;
   return '#' + [m[1], m[2], m[3]].map(x => (+x).toString(16).padStart(2, '0')).join('');
+}
+
+// ---------------------------------------------------------------- custom color picker
+// Replaces the native <input type=color> (whose hue/saturation drag direction can behave
+// oddly inside an Android WebView) with a small self-contained HSV picker we fully control,
+// plus a "recent colors" palette shared across all four color slots.
+function hexToRgb(hex) {
+  hex = (hex || '#000000').replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(ch => ch + ch).join('');
+  const n = parseInt(hex, 16) || 0;
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max };
+}
+function hsvToRgb(h, s, v) {
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
+}
+function hexToHsv(hex) { const { r, g, b } = hexToRgb(hex); return rgbToHsv(r, g, b); }
+function hsvToHex(h, s, v) {
+  const { r, g, b } = hsvToRgb(h, s, v);
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+const COLOR_VAR = { targum: '--targum', rashi: '--rashi', mikra: '--mikra', mikra2: '--mikra2' };
+const COLOR_FALLBACK = { targum: '#275079', rashi: '#6a4a1f', mikra: '#16161a', mikra2: '#3d5a80' };
+function effectiveColor(key) {
+  const cc = S.colors[S.theme] || {};
+  if (cc[key]) return cc[key];
+  const v = getComputedStyle(document.documentElement).getPropertyValue(COLOR_VAR[key]).trim();
+  return rgbToHex(v) || COLOR_FALLBACK[key];
+}
+function loadRecentColors() { return loadJSON('sm_recentColors', []); }
+function addRecentColor(hex) {
+  let arr = loadRecentColors().filter(c => c.toLowerCase() !== hex.toLowerCase());
+  arr.unshift(hex);
+  saveJSON('sm_recentColors', arr.slice(0, 10));
+}
+function renderRecentColors() {
+  const row = $('cpRecentRow');
+  const arr = loadRecentColors();
+  row.innerHTML = arr.map(c => `<button type="button" class="cpRecentSwatch" style="background:${c}" data-hex="${c}"></button>`).join('');
+  row.querySelectorAll('.cpRecentSwatch').forEach(b => b.addEventListener('click', () => applyPickedColor(b.dataset.hex)));
+}
+
+let cpState = null;
+function cpUpdateSquareBg() {
+  $('cpSquare').style.backgroundColor = `hsl(${cpState.h}, 100%, 50%)`;
+}
+function cpUpdateThumbs() {
+  $('cpSquareThumb').style.left = (cpState.s * 100) + '%';
+  $('cpSquareThumb').style.top = ((1 - cpState.v) * 100) + '%';
+  $('cpHueThumb').style.left = (cpState.h / 360 * 100) + '%';
+}
+function cpApplyLive() {
+  const hex = hsvToHex(cpState.h, cpState.s, cpState.v);
+  S.colors[S.theme][cpState.key] = hex;
+  saveSettings();
+  applyColorVars();
+  $('cpPreview').style.background = hex;
+  $('cpHex').value = hex;
+  return hex;
+}
+function applyPickedColor(hex) {
+  const { h, s, v } = hexToHsv(hex);
+  Object.assign(cpState, { h, s, v });
+  cpUpdateSquareBg();
+  cpUpdateThumbs();
+  cpApplyLive();
+}
+function openColorPicker(key) {
+  const titles = { targum: t('onkelosC'), rashi: t('rashiC'), mikra: t('mikraC'), mikra2: t('mikra2C') };
+  $('cpTitle').textContent = titles[key] || '';
+  const current = effectiveColor(key);
+  const { h, s, v } = hexToHsv(current);
+  cpState = { key, h, s, v };
+  cpUpdateSquareBg();
+  cpUpdateThumbs();
+  $('cpPreview').style.background = current;
+  $('cpHex').value = current;
+  renderRecentColors();
+  $('colorPickerModal').classList.remove('hidden');
+}
+function cpDragHandler(el, onMove) {
+  const move = ev => {
+    const rect = el.getBoundingClientRect();
+    const x = Math.min(rect.width, Math.max(0, ev.clientX - rect.left));
+    const y = Math.min(rect.height, Math.max(0, ev.clientY - rect.top));
+    onMove(x / rect.width, y / (rect.height || 1));
+  };
+  el.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
+    el.setPointerCapture(ev.pointerId);
+    move(ev);
+    const onMoveEv = e2 => move(e2);
+    const onUp = () => {
+      el.removeEventListener('pointermove', onMoveEv);
+      el.removeEventListener('pointerup', onUp);
+    };
+    el.addEventListener('pointermove', onMoveEv);
+    el.addEventListener('pointerup', onUp);
+  });
+}
+function bindColorPicker() {
+  cpDragHandler($('cpSquare'), (fx, fy) => {
+    cpState.s = fx; cpState.v = 1 - fy;
+    cpUpdateThumbs();
+    cpApplyLive();
+  });
+  cpDragHandler($('cpHue'), fx => {
+    cpState.h = fx * 360;
+    cpUpdateSquareBg();
+    cpUpdateThumbs();
+    cpApplyLive();
+  });
+  $('cpHex').addEventListener('change', ev => {
+    const m = ev.target.value.trim().match(/^#?([0-9a-fA-F]{6})$/);
+    if (!m) { ev.target.value = effectiveColor(cpState.key); return; }
+    applyPickedColor('#' + m[1]);
+  });
 }
 
 function bindSettings() {
@@ -750,14 +972,15 @@ function bindSettings() {
   $('setDailyPlan').addEventListener('change', ev => { S.dailyPlan = ev.target.checked; saveSettings(); renderDayBanner(); });
   $('setKeepAwake').addEventListener('change', ev => { S.keepAwake = ev.target.checked; saveSettings(); applyKeepAwake(); });
   $('setAutoMark').addEventListener('change', ev => { S.autoMark = ev.target.checked; saveSettings(); });
+  $('setZenProgress').addEventListener('change', ev => { S.zenProgress = ev.target.checked; saveSettings(); updateZenProgressVisibility(); });
   document.querySelectorAll('input[name=font]').forEach(r => r.addEventListener('change', ev => {
     S.font = ev.target.value; saveSettings(); applyAll();
   }));
-  $('colOnkelos').addEventListener('input', ev => { S.colors.targum = ev.target.value; saveSettings(); applyColorVars(); });
-  $('colRashi').addEventListener('input', ev => { S.colors.rashi = ev.target.value; saveSettings(); applyColorVars(); });
-  $('colMikra').addEventListener('input', ev => { S.colors.mikra = ev.target.value; saveSettings(); applyColorVars(); });
-  $('colMikra2').addEventListener('input', ev => { S.colors.mikra2 = ev.target.value; saveSettings(); applyColorVars(); });
-  $('btnResetColors').addEventListener('click', () => { S.colors = {}; saveSettings(); applyAll(); });
+  $('colOnkelos').addEventListener('click', () => openColorPicker('targum'));
+  $('colRashi').addEventListener('click', () => openColorPicker('rashi'));
+  $('colMikra').addEventListener('click', () => openColorPicker('mikra'));
+  $('colMikra2').addEventListener('click', () => openColorPicker('mikra2'));
+  $('btnResetColors').addEventListener('click', () => { S.colors[S.theme] = {}; saveSettings(); applyAll(); });
   $('btnNotifPerm').addEventListener('click', () => {
     const n = native();
     if (n && n.openNotificationSettings) { try { n.openNotificationSettings(); } catch (e) {} }
@@ -781,15 +1004,22 @@ function toggleZen() {
   if (document.body.classList.contains('zen')) {
     document.body.classList.remove('zen');
     $('zenExit').classList.add('hidden');
+    $('zenPlayBtn').classList.add('hidden');
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   } else {
     document.body.classList.add('zen');
     $('zenExit').classList.remove('hidden');
+    $('zenPlayBtn').classList.remove('hidden');
     if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
   }
+  updateZenProgressVisibility();
+}
+function updateZenProgressVisibility() {
+  $('zenProgress').classList.toggle('hidden', !(document.body.classList.contains('zen') && S.zenProgress));
 }
 
 function bindUI() {
+  bindColorPicker();
   $('btnMenu').addEventListener('click', () => {
     $('sideMenu').classList.remove('hidden');
     $('menuOverlay').classList.remove('hidden');
@@ -809,6 +1039,10 @@ function bindUI() {
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
     $(b.dataset.close).classList.add('hidden');
     if (b.dataset.close === 'settingsPage') renderReader(true);
+    if (b.dataset.close === 'colorPickerModal' && cpState) {
+      addRecentColor(effectiveColor(cpState.key));
+      applyAll();
+    }
   }));
   $('parshaName').addEventListener('click', () => { renderPicker(); openPage('pickerModal'); });
   $('parshaPrev').addEventListener('click', () => gotoParsha(pos.idx - 1, 0));
@@ -823,6 +1057,7 @@ function bindUI() {
     gotoAliyah(next);
   });
   $('btnPlay').addEventListener('click', () => { scrolling ? stopAutoScroll() : startAutoScroll(); });
+  $('zenPlayBtn').addEventListener('click', () => { scrolling ? stopAutoScroll() : startAutoScroll(); });
   $('speedUp').addEventListener('click', () => setSpeed(S.speed + 1));
   $('speedDown').addEventListener('click', () => setSpeed(S.speed - 1));
   $('btnBookmark').addEventListener('click', goToBookmark);
@@ -879,15 +1114,20 @@ function bindUI() {
 
 function goToBookmark() {
   if (!bookmarks.length) { toast(t('noBookmark')); return; }
+  stopAutoScroll();
   const b = bookmarks[0];
+  const cv = `${b.c}:${b.v}`;
+  // already reading the bookmarked aliyah: jump straight to the verse, no re-render at all
+  if (S.loc === b.loc && pos.idx === b.idx && pos.aliyah === b.aliyah) {
+    const el = document.querySelector(`.verse[data-cv="${cv}"]`);
+    if (el) { el.scrollIntoView({ block: 'center' }); pos.scroll = $('content').scrollTop; savePos(); }
+    return;
+  }
   S.loc = b.loc; saveSettings();
-  pos.loc = b.loc; pos.idx = b.idx; pos.aliyah = b.aliyah; pos.scroll = 0;
+  pos.loc = b.loc; pos.idx = b.idx; pos.aliyah = b.aliyah;
   savePos();
   applyAll();
-  renderReader(true).then(() => {
-    const el = document.querySelector(`.verse[data-cv="${b.c}:${b.v}"]`);
-    if (el) el.scrollIntoView({ block: 'center' });
-  });
+  renderReader(false, cv);
 }
 
 const ABOUT_HTML = `

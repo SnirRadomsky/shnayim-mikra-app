@@ -140,12 +140,12 @@ body[data-targumbg="yes"] .targum {
   margin: 40px 0 20px; position: relative;
 }
 html[data-theme="dark"] .verse.bookmarked { border-color: #8db8e8; }
-.verse.bookmarked::before {
-  content: '🔖 סימניה'; position: absolute; top: -32px; inset-inline-end: 0;
+.bmRibbon {
+  position: absolute; top: -32px; inset-inline-end: 0;
   background: var(--navy); color: #fff; padding: 5px 12px; border-radius: 8px;
   font-size: .55em; font-family: -apple-system, sans-serif; white-space: nowrap;
 }
-html[data-theme="dark"] .verse.bookmarked::before { background: #8db8e8; color: #101116; }
+html[data-theme="dark"] .bmRibbon { background: #8db8e8; color: #101116; }
 .aliyahDone {
   display: block; margin: 26px auto 10px; background: var(--navy); color: #fff;
   border: none; border-radius: 14px; padding: 12px 26px; font-family: inherit;
@@ -238,7 +238,35 @@ html[data-theme="dark"] .colorsample { background: #333a4a; }
 .rashi-sample { color: var(--rashi); }
 .mikra-sample { color: var(--mikra); }
 .mikra2-sample { color: var(--mikra2); font-style: italic; }
-.colorpick { width: 44px; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); padding: 2px; }
+.colorpick { width: 44px; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); padding: 2px; cursor: pointer; }
+
+/* ===== custom color picker (replaces native <input type=color>) ===== */
+.cpSquare {
+  width: 100%; height: 160px; border-radius: 10px; position: relative;
+  touch-action: none; cursor: pointer;
+  background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+}
+.cpSquareThumb {
+  position: absolute; width: 18px; height: 18px; border: 2px solid #fff; border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4); transform: translate(-50%, -50%); pointer-events: none;
+}
+.cpHue {
+  width: 100%; height: 22px; border-radius: 11px; position: relative; margin-top: 14px;
+  touch-action: none; cursor: pointer;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.cpHueThumb {
+  position: absolute; top: 50%; width: 22px; height: 22px; border: 2px solid #fff; border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4); transform: translate(-50%, -50%); pointer-events: none;
+}
+.cpPreviewRow { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.cpPreview { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line); flex: 0 0 auto; }
+.cpHexInput {
+  flex: 1; font-family: monospace; font-size: 1rem; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink); text-align: center;
+}
+.cpRecentRow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; min-height: 30px; }
+.cpRecentSwatch { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; padding: 0; }
 .outlinebtn {
   border: 1.5px solid var(--navy); color: var(--navy); background: none;
   border-radius: 10px; padding: 9px 22px; font-family: inherit; font-size: 1.05rem; cursor: pointer; margin-top: 8px;
@@ -259,8 +287,11 @@ html[data-theme="dark"] .outlinebtn { border-color: #8db8e8; color: #8db8e8; }
 .alcell {
   border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 4px; text-align: center;
   font-size: .95rem; cursor: pointer; background: var(--paper); color: var(--ink); font-family: inherit;
+  display: flex; flex-direction: column; gap: 2px;
 }
+.alcell .alverses { font-size: .75em; color: #888; }
 .alcell.done { background: #3e7d47; color: #fff; border-color: #3e7d47; }
+.alcell.done .alverses { color: rgba(255,255,255,.85); }
 .progstats { display: flex; justify-content: center; gap: 18px; padding: 14px; flex-wrap: wrap; }
 .statbox { background: var(--chip); border-radius: 12px; padding: 10px 18px; text-align: center; min-width: 90px; }
 .statbox .n { font-size: 1.5rem; font-weight: 700; }
@@ -303,9 +334,26 @@ html[data-theme="dark"] .outlinebtn { border-color: #8db8e8; color: #8db8e8; }
   z-index: 90; font-size: 1rem; max-width: 88vw; text-align: center;
 }
 
+/* ===== aliyah-size bar: shows how big the current aliyah is relative to the whole parasha ===== */
+.aliyahsizebar { display: flex; width: 100%; height: 6px; background: var(--bg); flex: 0 0 auto; }
+.aliyahseg { height: 100%; background: var(--line); }
+.aliyahseg.current { background: var(--blue); }
+html[data-theme="dark"] .aliyahseg.current { background: #8db8e8; }
+
+/* ===== fullscreen (zen) progress bar + floating play/stop button ===== */
+.zenprogress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: rgba(120,120,130,.3); z-index: 65; }
+.zenprogressfill { height: 100%; width: 0%; background: var(--blue); transition: width .15s linear; }
+.zenplaybtn {
+  position: fixed; bottom: calc(env(safe-area-inset-bottom) + 18px); left: 50%; transform: translateX(-50%);
+  z-index: 60; width: 52px; height: 52px; border-radius: 50%;
+  background: rgba(0,0,0,.45); color: #fff; border: 2px solid rgba(255,255,255,.85);
+  font-size: 1.2rem; display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.zenplaybtn.playing { background: rgba(29,52,97,.85); }
+
 /* zen mode */
 body.zen #topbar, body.zen #parshaNav, body.zen #aliyahNav,
-body.zen #readerBar, body.zen .bottombar, body.zen #dayBanner { display: none; }
+body.zen #readerBar, body.zen #aliyahSizeBar, body.zen .bottombar, body.zen #dayBanner { display: none; }
 body.zen #zenExit { display: block; }
 
 @media (min-width: 700px) {
