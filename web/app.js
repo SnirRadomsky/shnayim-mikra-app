@@ -567,6 +567,14 @@ function startAutoScroll() {
   scrollRAF = requestAnimationFrame(step);
 }
 function stopAutoScroll() {
+  if (scrolling) {
+    // the debounced scroll-position save below never fires while auto-scroll is running
+    // (every animation frame resets its timer), so pos.scroll would otherwise still hold
+    // whatever position we were at when auto-scroll *started* — sync it now, before
+    // anything (e.g. a bookmark-triggered re-render) reads pos.scroll and jumps back there.
+    pos.scroll = $('content').scrollTop;
+    savePos();
+  }
   scrolling = false;
   cancelAnimationFrame(scrollRAF);
   setPlayButtonsState(false);
