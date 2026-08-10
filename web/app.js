@@ -424,7 +424,6 @@ async function renderReader(keepScroll, scrollToCV) {
   updateProgressChip();
   updateNavButtons();
   updateScrollProgress();
-  updateAliyahSizeBar();
 }
 
 function updateProgressChip() {
@@ -442,32 +441,6 @@ function updateScrollProgress() {
   const pct = max > 0 ? Math.min(100, Math.max(0, (c.scrollTop / max) * 100)) : 0;
   $('scrollProgressFill').style.width = pct + '%';
   $('zenProgressFill').style.width = pct + '%';
-}
-
-// shows the 7 aliyot as segments sized by their relative verse count, so the reader can see
-// at a glance how long the current aliyah is compared to the rest of the parasha (not just %)
-async function updateAliyahSizeBar() {
-  const bar = $('aliyahSizeBar');
-  const thumb = $('aliyahSizeThumb');
-  if (pos.aliyah === 7) { bar.classList.add('hidden'); return; }
-  bar.classList.remove('hidden');
-  const m = meta();
-  const bd = await loadBook(m.book);
-  if (meta() !== m) return; // parasha changed while we were awaiting
-  const counts = [];
-  let total = 0;
-  for (let i = 0; i < 7; i++) {
-    counts.push(versesForRange(bd, m.aliyot[i]).length);
-    total += counts[i];
-  }
-  let before = 0;
-  for (let i = 0; i < pos.aliyah; i++) before += counts[i];
-  // the app reads right-to-left, so the thumb starts flush against the right edge
-  // (aliyah 1) and moves/shrinks towards the left as you progress through the aliyot
-  const fromRight = total ? (before / total * 100) : 0;
-  const width = total ? Math.max(counts[pos.aliyah] / total * 100, 3) : (100 / 7);
-  thumb.style.right = fromRight + '%';
-  thumb.style.width = width + '%';
 }
 
 function updateNavButtons() {
