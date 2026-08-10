@@ -21,7 +21,10 @@
 }
 html[data-theme="dark"] {
   --bg: #101116; --paper: #191b22; --ink: #e8e6df; --line: #2c2f3a;
-  --mikra: #e8e6df; --mikra2: #9fb8d8; --targum: #8db8e8; --rashi: #d3b47e; --chip: #262a36;
+  /* mikra2 has no background pill (unlike targum) and sits right after the much brighter
+     --mikra text, so it needs to be noticeably brighter than a plain "pass the contrast
+     checker" blue to still read comfortably against --paper. */
+  --mikra: #e8e6df; --mikra2: #c3d8f5; --targum: #8db8e8; --rashi: #d3b47e; --chip: #262a36;
   --targumbg: #262c3a;
 }
 html[data-theme="sepia"] {
