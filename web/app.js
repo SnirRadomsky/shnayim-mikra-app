@@ -178,7 +178,8 @@ function toggleVerseBookmark(c, v) {
 function bookmarkRibbonHTML(c, v) {
   const i = findBookmark(c, v);
   if (i < 0) return '';
-  return `<span class="bmRibbon">🔖 ${t('bookmarkLabel')}</span>`;
+  const pct = typeof bookmarks[i].pct === 'number' ? ` · ${bookmarks[i].pct}%` : '';
+  return `<span class="bmRibbon">🔖 ${t('bookmarkLabel')}${pct}</span>`;
 }
 function t(key, vars) {
   let s = (STR[S.lang] && STR[S.lang][key]) || STR.he[key] || key;
@@ -447,24 +448,26 @@ function updateScrollProgress() {
 // at a glance how long the current aliyah is compared to the rest of the parasha (not just %)
 async function updateAliyahSizeBar() {
   const bar = $('aliyahSizeBar');
-  if (pos.aliyah === 7) { bar.innerHTML = ''; return; }
+  const thumb = $('aliyahSizeThumb');
+  if (pos.aliyah === 7) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
   const m = meta();
   const bd = await loadBook(m.book);
   if (meta() !== m) return; // parasha changed while we were awaiting
-  const names = S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN;
   const counts = [];
   let total = 0;
   for (let i = 0; i < 7; i++) {
-    const c = versesForRange(bd, m.aliyot[i]).length;
-    counts.push(c);
-    total += c;
+    counts.push(versesForRange(bd, m.aliyot[i]).length);
+    total += counts[i];
   }
-  let h = '';
-  for (let i = 0; i < 7; i++) {
-    const pct = total ? (counts[i] / total * 100) : (100 / 7);
-    h += `<div class="aliyahseg${i === pos.aliyah ? ' current' : ''}" style="width:${pct}%" title="${names[i]}: ${counts[i]}"></div>`;
-  }
-  bar.innerHTML = h;
+  let before = 0;
+  for (let i = 0; i < pos.aliyah; i++) before += counts[i];
+  // the app reads right-to-left, so the thumb starts flush against the right edge
+  // (aliyah 1) and moves/shrinks towards the left as you progress through the aliyot
+  const fromRight = total ? (before / total * 100) : 0;
+  const width = total ? Math.max(counts[pos.aliyah] / total * 100, 3) : (100 / 7);
+  thumb.style.right = fromRight + '%';
+  thumb.style.width = width + '%';
 }
 
 function updateNavButtons() {
@@ -564,6 +567,14 @@ function startAutoScroll() {
   scrollRAF = requestAnimationFrame(step);
 }
 function stopAutoScroll() {
+  if (scrolling) {
+    // the debounced scroll-position save below never fires while auto-scroll is running
+    // (every animation frame resets its timer), so pos.scroll would otherwise still hold
+    // whatever position we were at when auto-scroll *started* — sync it now, before
+    // anything (e.g. a bookmark-triggered re-render) reads pos.scroll and jumps back there.
+    pos.scroll = $('content').scrollTop;
+    savePos();
+  }
   scrolling = false;
   cancelAnimationFrame(scrollRAF);
   setPlayButtonsState(false);
