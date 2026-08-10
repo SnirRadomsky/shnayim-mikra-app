@@ -62,8 +62,7 @@ const STR = {
     lastVerseRepeat: 'חזרת הפסוק האחרון', bookmarkAdded: 'הסימניה נוספה',
     bookmarkRemoved: 'הסימניה הוסרה', bookmarkLabel: 'סימניה', versesWord: 'פסוקים',
     zenProgressBar: 'הצג פס התקדמות במסך מלא',
-    aliyahSizes: 'גודל העליות', parashaSizeShort: 'פרשה קצרה', parashaSizeMedium: 'פרשה בינונית',
-    parashaSizeLong: 'פרשה ארוכה',
+    parashaSizeShort: 'פרשה קצרה', parashaSizeMedium: 'פרשה בינונית', parashaSizeLong: 'פרשה ארוכה',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -104,8 +103,7 @@ const STR = {
     lastVerseRepeat: 'Repeat of the last verse', bookmarkAdded: 'Bookmark added',
     bookmarkRemoved: 'Bookmark removed', bookmarkLabel: 'Bookmark', versesWord: 'verses',
     zenProgressBar: 'Show progress bar in fullscreen',
-    aliyahSizes: 'Aliyah sizes', parashaSizeShort: 'Short parasha', parashaSizeMedium: 'Medium parasha',
-    parashaSizeLong: 'Long parasha',
+    parashaSizeShort: 'Short parasha', parashaSizeMedium: 'Medium parasha', parashaSizeLong: 'Long parasha',
   },
 };
 
@@ -632,13 +630,34 @@ function setSpeed(v) {
 }
 
 // ---------------------------------------------------------------- progress page (this week's parasha)
-const RING_R = 52, RING_C = 2 * Math.PI * RING_R;
+const RING_R = 84, RING_C = 2 * Math.PI * RING_R;
 function setRingPct(circleEl, labelEl, pct) {
   if (circleEl) {
     circleEl.style.strokeDasharray = String(RING_C);
     circleEl.style.strokeDashoffset = String(RING_C * (1 - pct / 100));
   }
   if (labelEl) labelEl.textContent = pct + '%';
+}
+
+// places each aliyah's ordinal-name label directly over its pie slice, at the slice's
+// angular midpoint — so the diagram is self-labeled and doesn't need a separate legend.
+// Matches the CSS conic-gradient convention: 0deg = 12 o'clock, increasing clockwise.
+function positionAliyahPieLabels(el, counts, names) {
+  const total = counts.reduce((a, b) => a + b, 0) || 1;
+  const LABEL_R = 32; // label placement radius, as % of the diagram's width/height
+  let acc = 0;
+  let html = '';
+  counts.forEach((c, i) => {
+    const start = acc / total * 360;
+    acc += c;
+    const end = acc / total * 360;
+    const mid = (start + end) / 2;
+    const rad = mid * Math.PI / 180;
+    const x = 50 + LABEL_R * Math.sin(rad);
+    const y = 50 - LABEL_R * Math.cos(rad);
+    html += `<span class="aliyahPieLabelItem" style="left:${x}%;top:${y}%">${names[i]}</span>`;
+  });
+  el.innerHTML = html;
 }
 
 function renderProgress() {
@@ -666,20 +685,17 @@ function renderProgress() {
   }
 
   body.innerHTML = `
-    <div class="progring">
-      <svg viewBox="0 0 120 120" class="progringsvg">
-        <circle class="progringbg" cx="60" cy="60" r="${RING_R}"></circle>
-        <circle class="progringfill" id="progRingFill" cx="60" cy="60" r="${RING_R}"></circle>
+    <div class="progCombo">
+      <svg viewBox="0 0 200 200" class="progComboSvg">
+        <circle class="progRingBg" cx="100" cy="100" r="${RING_R}"></circle>
+        <circle class="progRingFill" id="progRingFill" cx="100" cy="100" r="${RING_R}"></circle>
       </svg>
-      <div class="progringlabel"><div class="n" id="progRingPct">0%</div></div>
+      <div class="aliyahPie" id="aliyahPie"></div>
+      <div class="aliyahPieLabels" id="aliyahPieLabels"></div>
+      <div class="progComboLabel"><div class="n" id="progRingPct">0%</div></div>
     </div>
     <h3 class="progweektitle">${m.he} <span class="parashaSizeBadge" id="parashaSizeBadge"></span></h3>
     <div class="progringsub" id="versesLeftN">…</div>
-    <div class="aliyahPieWrap">
-      <div class="aliyahPieTitle">${t('aliyahSizes')}</div>
-      <div class="aliyahPie" id="aliyahPie"></div>
-      <div class="aliyahPieLegend" id="aliyahPieLegend"></div>
-    </div>
     <div class="alrows">${rows}</div>`;
 
   body.querySelectorAll('.alrow').forEach(c => c.addEventListener('click', () => {
@@ -705,15 +721,12 @@ function renderProgress() {
     if (versesLeftEl) versesLeftEl.textContent = `${r.total - r.read} ${t('versesLeft')}`;
 
     // how big each aliyah is relative to the others in this parasha (a static fact, not
-    // tied to reading progress) — a 7-slice pie chart plus a color-keyed legend
+    // tied to reading progress) — a 7-slice pie chart, self-labeled on the slices
     const counts = r.perAliyah.map(a => a.count);
     const pieEl = body.querySelector('#aliyahPie');
     if (pieEl) pieEl.style.background = buildPieGradient(counts, ALIYAH_COLORS);
-    const legendEl = body.querySelector('#aliyahPieLegend');
-    if (legendEl) {
-      legendEl.innerHTML = counts.map((c, i) => `<span class="aliyahPieLegendItem">
-        <span class="aliyahPieDot" style="background:${ALIYAH_COLORS[i]}"></span>${names[i]} · ${c}</span>`).join('');
-    }
+    const labelsEl = body.querySelector('#aliyahPieLabels');
+    if (labelsEl) positionAliyahPieLabels(labelsEl, counts, names);
   }).catch(() => {});
 
   // how long this parasha is compared to all the others (short/medium/long by verse-count
