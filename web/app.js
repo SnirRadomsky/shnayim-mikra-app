@@ -166,20 +166,14 @@ function toggleVerseBookmark(c, v) {
     bookmarks.splice(i, 1);
     toast(t('bookmarkRemoved'));
   } else {
-    const el = $('content');
-    const max = el.scrollHeight - el.clientHeight;
-    const pct = max > 0 ? Math.round(Math.min(100, Math.max(0, (el.scrollTop / max) * 100))) : 0;
-    bookmarks = [{ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now(), pct }];
+    bookmarks = [{ loc: S.loc, idx: pos.idx, aliyah: pos.aliyah, c, v, ts: Date.now() }];
     toast(t('bookmarkAdded'));
   }
   saveBookmarks();
   renderReader(true);
 }
 function bookmarkRibbonHTML(c, v) {
-  const i = findBookmark(c, v);
-  if (i < 0) return '';
-  const pct = typeof bookmarks[i].pct === 'number' ? ` · ${bookmarks[i].pct}%` : '';
-  return `<span class="bmRibbon">🔖 ${t('bookmarkLabel')}${pct}</span>`;
+  return isVerseBookmarked(c, v) ? `<span class="bmRibbon">🔖 ${t('bookmarkLabel')}</span>` : '';
 }
 function t(key, vars) {
   let s = (STR[S.lang] && STR[S.lang][key]) || STR.he[key] || key;
@@ -426,12 +420,31 @@ async function renderReader(keepScroll, scrollToCV) {
   updateScrollProgress();
 }
 
-function updateProgressChip() {
-  const p = progOf(entry());
-  const n = aliyahCount();
-  let done = 0;
-  for (let i = 0; i < n; i++) if (p.a[i]) done++;
-  $('progressChip').textContent = Math.round(done / n * 100) + '%';
+// how many verses of `verses` are read up to and including (c,v) — used to give a bookmark
+// partial credit within its (not-yet-marked-done) aliyah, instead of only counting whole aliyot
+function verseIndexInRange(verses, c, v) {
+  const idx = verses.findIndex(vd => vd.c === c && vd.v === v);
+  return idx < 0 ? 0 : idx + 1;
+}
+
+// the chip shows how much of the whole parasha (all 7 aliyot, by verse count — not just how
+// many whole aliyot are marked done) has been read; a bookmark counts as having reached
+// that verse within its aliyah, even if the aliyah itself isn't marked done yet
+async function updateProgressChip() {
+  const e = entry(), m = meta();
+  const p = progOf(e);
+  const bm = bookmarks[0];
+  const bmHere = bm && bm.loc === S.loc && bm.idx === pos.idx ? bm : null;
+  const bd = await loadBook(m.book);
+  if (meta() !== m) return; // parasha changed while we were awaiting
+  let total = 0, read = 0;
+  for (let i = 0; i < 7; i++) {
+    const verses = versesForRange(bd, m.aliyot[i]);
+    total += verses.length;
+    if (p.a[i]) read += verses.length;
+    else if (bmHere && bmHere.aliyah === i) read += verseIndexInRange(verses, bmHere.c, bmHere.v);
+  }
+  $('progressChip').textContent = (total ? Math.round(read / total * 100) : 0) + '%';
 }
 
 // how far scrolled through the current aliyah's page (independent of aliyah-completion progress)
@@ -567,17 +580,15 @@ function renderProgress() {
   const p = progOf(e);
   const n = aliyahCount();
   const names = S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN;
-  // a bookmark in the aliyah currently being displayed here shows its saved scroll % on
-  // that aliyah's cell instead of the verse count, as a finer-grained "how far in" marker
+  // highlight the aliyah currently holding the bookmark (no percentage here — that lives
+  // only in the top progress chip now, which the bookmark also feeds into)
   const bm = bookmarks[0];
   const bmAliyah = (bm && bm.loc === S.loc && bm.idx === pos.idx && !p.a[bm.aliyah]) ? bm.aliyah : -1;
 
   let cells = '';
   for (let i = 0; i < n; i++) {
-    const isBm = i === bmAliyah;
-    const alText = isBm && typeof bm.pct === 'number' ? `🔖 ${bm.pct}%` : '';
-    cells += `<button class="alcell${p.a[i] ? ' done' : ''}${isBm ? ' bookmarked' : ''}" data-al="${i}">
-      <span class="alname">${names[i]}${p.a[i] ? ' ✓' : ''}</span><span class="alverses" data-alverses="${i}">${alText}</span></button>`;
+    cells += `<button class="alcell${p.a[i] ? ' done' : ''}${i === bmAliyah ? ' bookmarked' : ''}" data-al="${i}">
+      <span class="alname">${names[i]}${p.a[i] ? ' ✓' : ''}</span><span class="alverses" data-alverses="${i}"></span></button>`;
   }
 
   // streak: consecutive fully-read weeks before (and including) current week
@@ -635,7 +646,7 @@ function renderProgress() {
       const count = versesForRange(bd, m.aliyot[i]).length;
       if (!p.a[i]) left += count;
       const cEl = body.querySelector(`[data-alverses="${i}"]`);
-      if (cEl && i !== bmAliyah) cEl.textContent = `${count} ${t('versesWord')}`;
+      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
     }
     const el = $('versesLeftN');
     if (el) el.textContent = left;
@@ -646,7 +657,7 @@ function renderProgress() {
       const segs = (S.minhag === 'ashk' ? hd.a : hd.s) || [];
       const count = segs.reduce((sum, seg) => sum + seg.verses.length, 0);
       const cEl = body.querySelector('[data-alverses="7"]');
-      if (cEl && bmAliyah !== 7) cEl.textContent = `${count} ${t('versesWord')}`;
+      if (cEl) cEl.textContent = `${count} ${t('versesWord')}`;
     }).catch(() => {});
   }
 }
