@@ -282,17 +282,33 @@ html[data-theme="dark"] .outlinebtn { border-color: #8db8e8; color: #8db8e8; }
 .radiorow { display: flex; align-items: center; gap: 12px; justify-content: flex-start; padding: 9px 6px; font-size: 1.35rem; }
 .radiorow input { width: 22px; height: 22px; accent-color: var(--navy); }
 
-/* ===== progress page: this week's parasha (ring + per-aliyah bars) ===== */
-.progring { position: relative; width: 170px; height: 170px; margin: 22px auto 6px; }
-.progringsvg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.progringbg, .progringfill { fill: none; stroke-width: 12; }
-.progringbg { stroke: var(--chip); }
-.progringfill { stroke: var(--blue); stroke-linecap: round; transition: stroke-dashoffset .4s ease; }
-html[data-theme="dark"] .progringfill { stroke: #8db8e8; }
-.progringlabel {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+/* ===== progress page: this week's parasha — one combined diagram: an outer progress
+   ring (how much you've read) wrapped around a pie chart (how big each aliyah is,
+   self-labeled on its slice) with the overall % in the middle ===== */
+.progCombo { position: relative; width: 230px; height: 230px; margin: 22px auto 6px; }
+.progComboSvg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.progRingBg, .progRingFill { fill: none; stroke-width: 14; }
+.progRingBg { stroke: var(--chip); }
+.progRingFill { stroke: var(--blue); stroke-linecap: round; transition: stroke-dashoffset .4s ease; }
+html[data-theme="dark"] .progRingFill { stroke: #8db8e8; }
+.aliyahPie {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 72%; height: 72%; border-radius: 50%;
 }
-.progringlabel .n { font-size: 2rem; font-weight: 700; }
+.aliyahPieLabels { position: absolute; inset: 0; }
+.aliyahPieLabelItem {
+  position: absolute; transform: translate(-50%, -50%); text-align: center;
+  font-size: .68rem; font-weight: 700; color: #fff; background: rgba(0,0,0,.55);
+  border-radius: 8px; padding: 2px 7px; white-space: nowrap; pointer-events: none;
+}
+.progComboLabel {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.progComboLabel .n {
+  font-size: 1.7rem; font-weight: 700; background: var(--bg); border-radius: 50%;
+  width: 74px; height: 74px; display: flex; align-items: center; justify-content: center;
+}
 .progweektitle { text-align: center; margin: 4px 0 2px; }
 .parashaSizeBadge {
   display: inline-block; margin: 0 6px; padding: 3px 10px; border-radius: 20px;
@@ -302,16 +318,6 @@ html[data-theme="dark"] .progringfill { stroke: #8db8e8; }
 .parashaSizeBadge.medium { background: #c08a2d; }
 .parashaSizeBadge.long { background: #b6432f; }
 .progringsub { text-align: center; color: #888; font-size: .9rem; margin-bottom: 18px; }
-
-.aliyahPieWrap { display: flex; flex-direction: column; align-items: center; padding: 0 18px 22px; }
-.aliyahPieTitle { font-size: .95rem; font-weight: 700; margin-bottom: 10px; }
-.aliyahPie { width: 130px; height: 130px; border-radius: 50%; flex: 0 0 auto; }
-.aliyahPieLegend {
-  display: grid; grid-template-columns: repeat(2, auto); gap: 5px 18px;
-  margin-top: 14px; font-size: .82rem; justify-content: center;
-}
-.aliyahPieLegendItem { display: flex; align-items: center; gap: 6px; }
-.aliyahPieDot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
 
 .alrows { display: flex; flex-direction: column; gap: 12px; padding: 0 18px 20px; }
 .alrow {
