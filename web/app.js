@@ -9,6 +9,9 @@ const ALIYAH_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמיש
 const ALIYAH_EN = ['Rishon', 'Sheni', 'Shlishi', "Revi'i", 'Chamishi', 'Shishi', "Shvi'i", 'Haftarah'];
 // "עלייה" is feminine, so "end of aliyah" needs the feminine ordinal form (שלישית, not שלישי)
 const ALIYAH_HE_FEM = ['ראשונה', 'שנייה', 'שלישית', 'רביעית', 'חמישית', 'שישית', 'שביעית'];
+// one distinct color per aliyah (1-7), used by the "how big is each aliyah" pie chart
+const ALIYAH_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#af7aa1', '#76b7b2', '#edc948'];
+const TORAH_BOOKS = ['Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy'];
 const BOOK_HE = {
   Genesis: 'בראשית', Exodus: 'שמות', Leviticus: 'ויקרא', Numbers: 'במדבר', Deuteronomy: 'דברים',
   Joshua: 'יהושע', Judges: 'שופטים', 'I Samuel': 'שמואל א', 'II Samuel': 'שמואל ב',
@@ -59,6 +62,8 @@ const STR = {
     lastVerseRepeat: 'חזרת הפסוק האחרון', bookmarkAdded: 'הסימניה נוספה',
     bookmarkRemoved: 'הסימניה הוסרה', bookmarkLabel: 'סימניה', versesWord: 'פסוקים',
     zenProgressBar: 'הצג פס התקדמות במסך מלא',
+    aliyahSizes: 'גודל העליות', parashaSizeShort: 'פרשה קצרה', parashaSizeMedium: 'פרשה בינונית',
+    parashaSizeLong: 'פרשה ארוכה',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -99,6 +104,8 @@ const STR = {
     lastVerseRepeat: 'Repeat of the last verse', bookmarkAdded: 'Bookmark added',
     bookmarkRemoved: 'Bookmark removed', bookmarkLabel: 'Bookmark', versesWord: 'verses',
     zenProgressBar: 'Show progress bar in fullscreen',
+    aliyahSizes: 'Aliyah sizes', parashaSizeShort: 'Short parasha', parashaSizeMedium: 'Medium parasha',
+    parashaSizeLong: 'Long parasha',
   },
 };
 
@@ -427,6 +434,48 @@ function verseIndexInRange(verses, c, v) {
   return idx < 0 ? 0 : idx + 1;
 }
 
+// a CSS conic-gradient pie chart: one slice per count, sized by its share of the total
+function buildPieGradient(counts, colors) {
+  const total = counts.reduce((a, b) => a + b, 0) || 1;
+  let acc = 0;
+  const stops = counts.map((c, i) => {
+    const start = (acc / total * 360).toFixed(2);
+    acc += c;
+    const end = (acc / total * 360).toFixed(2);
+    return `${colors[i % colors.length]} ${start}deg ${end}deg`;
+  });
+  return `conic-gradient(${stops.join(', ')})`;
+}
+
+// total verse counts for every parasha in PARSHIYOT, computed once per session (needs all
+// 5 Torah books loaded) and used to classify the current parasha as short/medium/long
+// relative to all the others (by verse-count tercile).
+let parashaSizeInfo = null;
+async function getParashaSizeInfo() {
+  if (parashaSizeInfo) return parashaSizeInfo;
+  const books = {};
+  await Promise.all(TORAH_BOOKS.map(async b => { books[b] = await loadBook(b); }));
+  const sizes = {};
+  for (const key of Object.keys(PARSHIYOT)) {
+    const pm = PARSHIYOT[key];
+    if (!pm.aliyot || !books[pm.book]) continue;
+    sizes[key] = pm.aliyot.reduce((sum, rng) => sum + versesForRange(books[pm.book], rng).length, 0);
+  }
+  const sorted = Object.values(sizes).sort((a, b) => a - b);
+  parashaSizeInfo = {
+    sizes,
+    p33: sorted[Math.floor(sorted.length * 0.33)],
+    p66: sorted[Math.floor(sorted.length * 0.66)],
+  };
+  return parashaSizeInfo;
+}
+function classifyParashaSize(total, info) {
+  if (total <= info.p33) return 'short';
+  if (total <= info.p66) return 'medium';
+  return 'long';
+}
+const PARASHA_SIZE_KEY = { short: 'parashaSizeShort', medium: 'parashaSizeMedium', long: 'parashaSizeLong' };
+
 // verse-level progress across the whole parasha (all 7 aliyot) — a bookmark gives its
 // (not-yet-done) aliyah partial credit up to that verse. Shared by the reader's progress
 // chip and the weekly Progress page's ring + per-aliyah bars, so they always agree.
@@ -624,8 +673,13 @@ function renderProgress() {
       </svg>
       <div class="progringlabel"><div class="n" id="progRingPct">0%</div></div>
     </div>
-    <h3 class="progweektitle">${m.he}</h3>
+    <h3 class="progweektitle">${m.he} <span class="parashaSizeBadge" id="parashaSizeBadge"></span></h3>
     <div class="progringsub" id="versesLeftN">…</div>
+    <div class="aliyahPieWrap">
+      <div class="aliyahPieTitle">${t('aliyahSizes')}</div>
+      <div class="aliyahPie" id="aliyahPie"></div>
+      <div class="aliyahPieLegend" id="aliyahPieLegend"></div>
+    </div>
     <div class="alrows">${rows}</div>`;
 
   body.querySelectorAll('.alrow').forEach(c => c.addEventListener('click', () => {
@@ -649,6 +703,28 @@ function renderProgress() {
     setRingPct(body.querySelector('#progRingFill'), body.querySelector('#progRingPct'), r.overallPct);
     const versesLeftEl = body.querySelector('#versesLeftN');
     if (versesLeftEl) versesLeftEl.textContent = `${r.total - r.read} ${t('versesLeft')}`;
+
+    // how big each aliyah is relative to the others in this parasha (a static fact, not
+    // tied to reading progress) — a 7-slice pie chart plus a color-keyed legend
+    const counts = r.perAliyah.map(a => a.count);
+    const pieEl = body.querySelector('#aliyahPie');
+    if (pieEl) pieEl.style.background = buildPieGradient(counts, ALIYAH_COLORS);
+    const legendEl = body.querySelector('#aliyahPieLegend');
+    if (legendEl) {
+      legendEl.innerHTML = counts.map((c, i) => `<span class="aliyahPieLegendItem">
+        <span class="aliyahPieDot" style="background:${ALIYAH_COLORS[i]}"></span>${names[i]} · ${c}</span>`).join('');
+    }
+  }).catch(() => {});
+
+  // how long this parasha is compared to all the others (short/medium/long by verse-count
+  // tercile) — needs every Torah book loaded, so it's cached and computed lazily
+  getParashaSizeInfo().then(info => {
+    if (meta() !== m) return;
+    const total = info.sizes[e[1]];
+    if (total == null) return;
+    const cls = classifyParashaSize(total, info);
+    const badge = body.querySelector('#parashaSizeBadge');
+    if (badge) { badge.textContent = t(PARASHA_SIZE_KEY[cls]); badge.className = 'parashaSizeBadge ' + cls; }
   }).catch(() => {});
 
   if (n === 8) {
