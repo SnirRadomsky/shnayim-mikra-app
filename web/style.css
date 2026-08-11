@@ -429,7 +429,7 @@ html[data-theme="dark"] .zenminimap.expanded .zenminimaptrack { background: rgba
   background: rgba(0,0,0,.5); color: #fff; border: none; font-size: .85rem; cursor: pointer;
   opacity: 0; pointer-events: none; transition: opacity .18s ease;
 }
-.zenminimap.expanded .zenminimapclose { opacity: 1; pointer-events: auto; }
+.zenminimap.pinned .zenminimapclose { opacity: 1; pointer-events: auto; }
 
 @media (min-width: 700px) {
   .zenminimap { left: 16px; }

@@ -1158,18 +1158,32 @@ function updateZenProgressVisibility() {
 // A "how big is this aliyah, and where am I in it" indicator, always shown in fullscreen
 // (zen) mode: a slim, mostly-transparent bar that blooms — VS Code minimap style — into a
 // shrunk real preview of the whole aliyah with the currently-visible slice highlighted.
-// Pressing/dragging the bar expands it, scrubs the reading position, and keeps it open —
-// dragging must never collapse it mid-gesture. Only the small ✕ button closes it back down.
-// Collapsed, it costs nothing visually or perf-wise; expanded, it's rebuilt from a DOM clone
-// so it always matches what's on screen.
-const MINIMAP_MAX_TRACK_RATIO = .72; // cap on how much of the viewport height the thumbnail may fill
-let minimapDragging = false;
+//
+// A plain tap on the collapsed bar pins it open (shows the ✕ close button; dragging it
+// around afterwards never collapses it — only ✕ does). A drag starting from the collapsed
+// bar instead blooms it open temporarily, with no ✕ shown, auto-collapsing a couple of
+// seconds after the gesture ends — dragging again before that resets the timer.
+const MINIMAP_MAX_TRACK_RATIO = .72;   // cap on how much of the viewport height the thumbnail may fill
+const MINIMAP_TEMP_COLLAPSE_MS = 2200; // auto-collapse delay for a drag-from-collapsed bloom
+const MINIMAP_DRAG_THRESHOLD = 8;      // px of movement before a press counts as a drag, not a tap
+let minimapDragging = false, minimapDidDrag = false, minimapStartedPinned = false;
+let minimapPointerStartY = 0, minimapCollapseTimer = 0;
 
 function updateZenMinimapVisibility() {
   const show = document.body.classList.contains('zen');
   $('zenMinimap').classList.toggle('hidden', !show);
-  if (!show) $('zenMinimap').classList.remove('expanded');
+  if (!show) {
+    clearTimeout(minimapCollapseTimer);
+    $('zenMinimap').classList.remove('expanded', 'pinned');
+  }
   if (show) syncMinimap(true);
+}
+
+function minimapScheduleTempCollapse() {
+  clearTimeout(minimapCollapseTimer);
+  minimapCollapseTimer = setTimeout(() => {
+    if (!minimapDragging) $('zenMinimap').classList.remove('expanded', 'pinned');
+  }, MINIMAP_TEMP_COLLAPSE_MS);
 }
 
 function buildMinimapClone() {
@@ -1195,9 +1209,12 @@ function buildMinimapClone() {
 // refreshes the cloned text preview (needed after content or font-size changes / resize) —
 // skip it on plain scroll, which only has to move the viewport box.
 //
-// the scale always shows the *whole* aliyah at a glance (bounded by both width and height),
-// even if a long aliyah or a big font size shrinks the text past readability — the viewport
-// box's position/size within the whole thing is the point, not legible glyphs.
+// always shows the *whole* aliyah at a glance. The horizontal scale is fixed (width /
+// baseW) so the preview's "ink" always fills the track edge-to-edge, regardless of aliyah
+// length. The vertical scale is capped separately to fit the whole thing within maxTrackH —
+// for a very long aliyah (or a big font size) that means squashing lines vertically *more*
+// than horizontally, which distorts true letter shapes but keeps every verse visible as a
+// colored band, instead of shrinking both axes together into an invisible hairline.
 function syncMinimap(rebuild) {
   if (!document.body.classList.contains('zen')) return;
   const content = $('content');
@@ -1210,8 +1227,9 @@ function syncMinimap(rebuild) {
 
   const expandedWidth = window.innerWidth >= 700 ? 76 : 58;
   const maxTrackH = window.innerHeight * MINIMAP_MAX_TRACK_RATIO;
-  const scale = Math.min(expandedWidth / baseW, maxTrackH / scrollH);
-  const trackH = Math.max(40, Math.round(scrollH * scale));
+  const scaleX = expandedWidth / baseW;
+  const trackH = Math.max(40, Math.round(Math.min(scrollH * scaleX, maxTrackH)));
+  const scaleY = trackH / scrollH;
 
   const maxScroll = Math.max(1, content.scrollHeight - content.clientHeight);
   const ratio = Math.min(1, Math.max(0, content.scrollTop / maxScroll));
@@ -1219,7 +1237,7 @@ function syncMinimap(rebuild) {
   const vpTop = ratio * (trackH - vpH);
 
   track.style.height = trackH + 'px';
-  preview.style.transform = `scale(${scale})`;
+  preview.style.transform = `scale(${scaleX}, ${scaleY})`;
   preview.style.width = baseW + 'px';
   preview.style.height = scrollH + 'px';
   viewport.style.height = Math.round(vpH) + 'px';
@@ -1279,21 +1297,36 @@ function bindUI() {
   $('btnBookmark').addEventListener('click', goToBookmark);
   $('btnZen').addEventListener('click', toggleZen);
   $('zenExit').addEventListener('click', toggleZen);
-  // any press (collapsed or expanded) expands it and scrubs to that position — dragging the
-  // highlighted viewport box around is exactly how you navigate, so it must never collapse
-  // mid-drag. Only the explicit close button collapses it back.
   $('zenMinimapTrack').addEventListener('pointerdown', ev => {
-    $('zenMinimap').classList.add('expanded');
+    const mm = $('zenMinimap');
+    minimapStartedPinned = mm.classList.contains('pinned');
+    clearTimeout(minimapCollapseTimer);
+    mm.classList.add('expanded');
     minimapDragging = true;
+    minimapDidDrag = false;
+    minimapPointerStartY = ev.clientY;
     try { $('zenMinimapTrack').setPointerCapture(ev.pointerId); } catch (e) {}
     minimapScrubTo(ev.clientY);
   });
   $('zenMinimapTrack').addEventListener('pointermove', ev => {
     if (!minimapDragging) return;
+    if (Math.abs(ev.clientY - minimapPointerStartY) > MINIMAP_DRAG_THRESHOLD) minimapDidDrag = true;
     minimapScrubTo(ev.clientY);
   });
-  window.addEventListener('pointerup', () => { minimapDragging = false; });
-  $('zenMinimapClose').addEventListener('click', () => { $('zenMinimap').classList.remove('expanded'); });
+  window.addEventListener('pointerup', () => {
+    if (!minimapDragging) return;
+    minimapDragging = false;
+    // already pinned open before this gesture: dragging it around must never collapse it —
+    // only the ✕ button does. that's unrelated to the tap-vs-drag distinction below, which
+    // only applies to a gesture that *starts* from the collapsed bar.
+    if (minimapStartedPinned) return;
+    if (minimapDidDrag) minimapScheduleTempCollapse();
+    else $('zenMinimap').classList.add('pinned');
+  });
+  $('zenMinimapClose').addEventListener('click', () => {
+    clearTimeout(minimapCollapseTimer);
+    $('zenMinimap').classList.remove('expanded', 'pinned');
+  });
   window.addEventListener('resize', () => syncMinimap(true));
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     S.viewFilter = b.dataset.vf;
