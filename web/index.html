@@ -38,6 +38,7 @@
 
   <div id="readerBar">
     <span id="progressChip" class="chip">0%</span>
+    <span id="timeChip" class="chip timechip" title="זמן שנותר לעלייה">⏱ …</span>
     <div id="viewFilter" class="seg3">
       <button data-vf="all" class="on">הכל</button>
       <button data-vf="mikra">מקרא</button>
@@ -67,6 +68,7 @@
 
   <button id="zenExit" class="hidden" aria-label="יציאה ממסך מלא">✕</button>
   <button id="zenPlayBtn" class="hidden zenplaybtn" aria-label="הפעל/עצור גלילה אוטומטית">▶</button>
+  <div id="zenTime" class="hidden zentime" aria-live="off">⏱ …</div>
   <div id="zenMinimap" class="hidden zenminimap">
     <button id="zenMinimapClose" class="zenminimapclose" aria-label="כווץ את מפת העלייה">✕</button>
     <div id="zenMinimapTrack" class="zenminimaptrack">
@@ -251,6 +253,9 @@
         <button data-val="no" data-i18n="no">לא</button>
       </div>
       <label class="setrow" style="margin-top:10px;"><span data-i18n="zenProgressBar">הצג פס התקדמות במסך מלא</span><input type="checkbox" id="setZenProgress" class="tgl"></label>
+      <label class="setrow"><span data-i18n="zenTimeLive">הצג זמן שנותר לעלייה במסך מלא</span><input type="checkbox" id="setZenTime" class="tgl"></label>
+      <p class="hint" data-i18n="wpmNote">חישוב הזמן לפי 200 מילים לדקה (חפץ חיים, קונטרס תורת הבית פרק ב׳).</p>
+      <p class="hint" data-i18n="liveScrollNote">בזמן גלילה אוטומטית הזמן מחושב לפי מהירות הגלילה בפועל.</p>
     </div>
 
     <div class="setgroup">

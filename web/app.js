@@ -63,6 +63,14 @@ const STR = {
     bookmarkRemoved: 'הסימניה הוסרה', bookmarkLabel: 'סימניה', versesWord: 'פסוקים',
     zenProgressBar: 'הצג פס התקדמות במסך מלא',
     parashaSizeShort: 'פרשה קצרה', parashaSizeMedium: 'פרשה בינונית', parashaSizeLong: 'פרשה ארוכה',
+    zenTimeLive: 'הצג זמן שנותר לעלייה במסך מלא',
+    minsShort: 'דק׳', hoursShort: 'שע׳',
+    timeLeftAliyah: 'נותר לעלייה', timeLeftParasha: 'נותר לפרשה', readTime: 'זמן קריאה',
+    wpmNote: 'חישוב הזמן לפי 200 מילים לדקה (חפץ חיים, קונטרס תורת הבית פרק ב׳).',
+    liveScrollNote: 'בזמן גלילה אוטומטית הזמן מחושב לפי מהירות הגלילה בפועל.',
+    sizeVsOthers: 'אורך הפרשה ביחס לשאר הפרשות',
+    sizeShortest: 'הקצרה', sizeLongest: 'הארוכה', sizeAvg: 'ממוצע',
+    longerThanPct: 'ארוכה מ־{pct}% מהפרשות',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -104,6 +112,14 @@ const STR = {
     bookmarkRemoved: 'Bookmark removed', bookmarkLabel: 'Bookmark', versesWord: 'verses',
     zenProgressBar: 'Show progress bar in fullscreen',
     parashaSizeShort: 'Short parasha', parashaSizeMedium: 'Medium parasha', parashaSizeLong: 'Long parasha',
+    zenTimeLive: 'Show time left for the aliyah in fullscreen',
+    minsShort: 'min', hoursShort: 'h',
+    timeLeftAliyah: 'Left in this aliyah', timeLeftParasha: 'Left in the parashah', readTime: 'Reading time',
+    wpmNote: 'Times assume 200 words per minute (Chafetz Chaim, Kuntres Torat HaBayit, ch. 2).',
+    liveScrollNote: 'While auto-scrolling the time is computed from the actual scroll speed.',
+    sizeVsOthers: 'Length compared with the other parshiyot',
+    sizeShortest: 'shortest', sizeLongest: 'longest', sizeAvg: 'average',
+    longerThanPct: 'Longer than {pct}% of the parshiyot',
   },
 };
 
@@ -114,8 +130,12 @@ const DEFAULTS = {
   reminderOn: false, reminderDay: 4, reminderTime: '20:00',
   font: 'frank', scrollbar: 'yes', autoAdvance: 'yes',
   dailyPlan: false, keepAwake: true, autoMark: true, viewFilter: 'all',
-  targumBg: 'yes', zenProgress: false,
+  targumBg: 'yes', zenProgress: false, zenTime: false,
 };
+
+// Reading-speed rule of thumb used for every "how long will this take / how much is left"
+// estimate: 200 words a minute. Source: חפץ חיים, קונטרס תורת הבית פרק ב'.
+const WORDS_PER_MINUTE = 200;
 
 // ---------------------------------------------------------------- state
 let S = loadJSON('sm_settings', {});
@@ -275,6 +295,76 @@ function versesForRange(bookData, range) {
   return out;
 }
 
+// ------------------------------------------------------- reading time (200 words/min)
+// Every estimate below counts the words the reader actually has to say with the *current*
+// settings — so a verse shown twice counts twice, and Onkelos/Rashi only count when shown.
+function countWords(s) {
+  if (!s) return 0;
+  const m = s.replace(/\{[פס]\}/g, ' ').match(/[^\s]+/g);
+  return m ? m.length : 0;
+}
+function verseReadingWords(vd) {
+  const showMikra = S.viewFilter !== 'targum';
+  const showTargum = S.viewFilter !== 'mikra';
+  let w = 0;
+  if (showMikra) {
+    const mw = countWords(vd.m);
+    w += mw;
+    if (S.twice === 'twice' && showTargum) w += mw;
+  }
+  if (showTargum && S.onkelos) w += countWords(vd.t);
+  if (showTargum && S.rashi && vd.r) w += vd.r.reduce((s, r) => s + countWords(r.replace(/<[^>]*>/g, ' ')), 0);
+  return w;
+}
+function secondsForWords(words) { return words / WORDS_PER_MINUTE * 60; }
+
+// "≈ 12 דק׳" — a coarse estimate, for planning ahead
+function fmtEstimate(sec) {
+  if (!(sec > 0)) return '0 ' + t('minsShort');
+  if (sec < 45) return '< 1 ' + t('minsShort');
+  const mins = Math.round(sec / 60);
+  if (mins < 60) return mins + ' ' + t('minsShort');
+  return Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0') + ' ' + t('hoursShort');
+}
+// "3:42" — a live countdown, for the auto-scroll clock
+function fmtClock(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+           : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// word count per aliyah (index 0..6, plus 7 = haftara when it's enabled), cached per
+// parasha + per the settings that change how much text is actually read
+let wordsCache = { key: '', arr: null };
+function readingSig() {
+  return [S.viewFilter, S.twice, S.onkelos ? 1 : 0, S.rashi ? 1 : 0, S.minhag, aliyahCount()].join(',');
+}
+async function getAliyahWords() {
+  const e = entry();
+  const key = S.loc + '|' + progKey(e) + '|' + readingSig();
+  if (wordsCache.key === key && wordsCache.arr) return wordsCache.arr;
+  const m = PARSHIYOT[e[1]];
+  const bd = await loadBook(m.book);
+  const arr = [];
+  for (let i = 0; i < 7; i++) {
+    arr.push(versesForRange(bd, m.aliyot[i]).reduce((s, vd) => s + verseReadingWords(vd), 0));
+  }
+  if (aliyahCount() === 8) {
+    let hw = 0;
+    try {
+      const haft = await loadHaftarot();
+      const hd = haft[e[1]];
+      const segs = (S.minhag === 'ashk' ? hd.a : hd.s) || [];
+      // the haftarah is read once, without targum
+      hw = segs.reduce((s, seg) => s + seg.verses.reduce((x, vd) => x + countWords(vd.t), 0), 0);
+    } catch (err) { hw = 0; }
+    arr.push(hw);
+  }
+  wordsCache = { key, arr };
+  return arr;
+}
+
 // ---------------------------------------------------------------- rendering
 function mikraHTML(vd, cls) {
   const { text, mark } = splitPMark(vd.m);
@@ -423,6 +513,7 @@ async function renderReader(keepScroll, scrollToCV) {
   updateProgressChip();
   updateNavButtons();
   updateScrollProgress();
+  updateTimeChip();
   syncMinimap(true);
 }
 
@@ -463,10 +554,24 @@ async function getParashaSizeInfo() {
   const sorted = Object.values(sizes).sort((a, b) => a - b);
   parashaSizeInfo = {
     sizes,
+    sorted,
     p33: sorted[Math.floor(sorted.length * 0.33)],
     p66: sorted[Math.floor(sorted.length * 0.66)],
+    min: sorted[0] || 0,
+    max: sorted[sorted.length - 1] || 1,
+    avg: sorted.length ? Math.round(sorted.reduce((a, b) => a + b, 0) / sorted.length) : 0,
   };
   return parashaSizeInfo;
+}
+// where `total` sits on the min..max span of all parshiyot, as a 0..100 position
+function sizeGaugePos(total, info) {
+  const span = info.max - info.min;
+  return span > 0 ? Math.min(100, Math.max(0, (total - info.min) / span * 100)) : 50;
+}
+// share of parshiyot strictly shorter than `total`
+function sizePercentile(total, info) {
+  if (!info.sorted.length) return 0;
+  return Math.round(info.sorted.filter(v => v < total).length / info.sorted.length * 100);
 }
 function classifyParashaSize(total, info) {
   if (total <= info.p33) return 'short';
@@ -503,6 +608,62 @@ async function updateProgressChip() {
   const r = await computeParashaProgress();
   if (meta() !== r.meta) return; // parasha changed while we were awaiting
   $('progressChip').textContent = r.overallPct + '%';
+}
+
+// ------------------------------------------------- "time left in this aliyah" indicator
+// Two different numbers share one chip (and, optionally, one fullscreen readout):
+//   * idle          — the Chafetz Chaim estimate: words still below the top of the
+//                     viewport, at 200 words a minute.
+//   * auto-scrolling — a live countdown: pixels left to scroll / the current scroll speed,
+//                     i.e. when the automatic scroll will actually reach the end.
+let curAliyahWords = 0;   // word count of the aliyah currently on screen
+let lastTimeChipPaint = 0;
+
+// share of the page that has already scrolled past the top of the viewport — what's still
+// visible counts as unread, which is why this uses scrollHeight and not maxScroll
+function readFraction() {
+  const c = $('content');
+  const h = c.scrollHeight;
+  return h > 0 ? Math.min(1, Math.max(0, c.scrollTop / h)) : 0;
+}
+function autoScrollSecondsLeft() {
+  const c = $('content');
+  const left = Math.max(0, c.scrollHeight - c.clientHeight - c.scrollTop);
+  return left / pxPerSec();
+}
+function paintTimeChip() {
+  const txt = scrolling
+    ? '▶ ' + fmtClock(autoScrollSecondsLeft())
+    : '⏱ ' + fmtEstimate(secondsForWords(curAliyahWords * (1 - readFraction())));
+  const chip = $('timeChip');
+  if (chip) {
+    chip.textContent = txt;
+    chip.classList.toggle('live', scrolling);
+  }
+  const zen = $('zenTime');
+  if (zen) {
+    zen.textContent = txt;
+    zen.classList.toggle('live', scrolling);
+  }
+  lastTimeChipPaint = performance.now();
+}
+// throttled variant for the animation-frame / scroll paths
+function paintTimeChipThrottled(minMs) {
+  if (performance.now() - lastTimeChipPaint >= (minMs || 250)) paintTimeChip();
+}
+let timeChipSeq = 0;
+async function updateTimeChip() {
+  const seq = ++timeChipSeq;
+  paintTimeChip();  // paint immediately with whatever we already know
+  let words;
+  try { words = await getAliyahWords(); } catch (e) { return; }
+  if (seq !== timeChipSeq) return;
+  curAliyahWords = words[pos.aliyah] || 0;
+  paintTimeChip();
+}
+function updateZenTimeVisibility() {
+  const el = $('zenTime');
+  if (el) el.classList.toggle('hidden', !(document.body.classList.contains('zen') && S.zenTime));
 }
 
 // how far scrolled through the current aliyah's page (independent of aliyah-completion progress)
@@ -587,6 +748,7 @@ function setPlayButtonsState(playing) {
 function startAutoScroll() {
   scrolling = true;
   setPlayButtonsState(true);
+  paintTimeChip();  // switch the chip over to the live countdown right away
   lastTs = 0; scrollRemainder = 0;
   const step = ts => {
     if (!scrolling) return;
@@ -604,6 +766,9 @@ function startAutoScroll() {
           return;
         }
       }
+      // live countdown to the end of the scroll (also keeps ticking while px rounds to 0
+      // at very low speeds, so the clock never looks frozen)
+      paintTimeChipThrottled(250);
     }
     lastTs = ts;
     scrollRAF = requestAnimationFrame(step);
@@ -622,12 +787,14 @@ function stopAutoScroll() {
   scrolling = false;
   cancelAnimationFrame(scrollRAF);
   setPlayButtonsState(false);
+  paintTimeChip();  // back to the words-per-minute estimate
 }
 function setSpeed(v) {
   S.speed = Math.max(1, Math.min(100, v));
   $('speedVal').textContent = S.speed;
   $('speedVal2').textContent = S.speed;
   saveSettings();
+  paintTimeChip();  // a different speed means a different live countdown
 }
 
 // ---------------------------------------------------------------- progress page (this week's parasha)
@@ -681,7 +848,10 @@ function renderProgress() {
         <span class="alrowpct" data-alpct="${i}">${pct0}%</span>
       </div>
       <div class="alrowbar"><div class="alrowfill" data-alfill="${i}" style="width:${pct0}%"></div></div>
-      <div class="alrowverses" data-alverses="${i}"></div>
+      <div class="alrowmeta">
+        <span class="alrowverses" data-alverses="${i}"></span>
+        <span class="alrowtime" data-altime="${i}"></span>
+      </div>
     </button>`;
   }
 
@@ -697,7 +867,22 @@ function renderProgress() {
     </div>
     <h3 class="progweektitle">${m.he} <span class="parashaSizeBadge" id="parashaSizeBadge"></span></h3>
     <div class="progringsub" id="versesLeftN">…</div>
-    <div class="alrows">${rows}</div>`;
+    <div class="progringsub progTimeLeft" id="parashaTimeLeft">⏱ …</div>
+    <div class="sizeGauge" id="sizeGauge">
+      <div class="sizeGaugeTitle">${t('sizeVsOthers')}</div>
+      <div class="sizeGaugeTrack">
+        <div class="sizeGaugeFill" id="sizeGaugeFill"></div>
+        <div class="sizeGaugeAvg" id="sizeGaugeAvg"></div>
+        <div class="sizeGaugeMark" id="sizeGaugeMark"></div>
+        <div class="sizeGaugeAvgLbl" id="sizeGaugeAvgLbl">—</div>
+      </div>
+      <div class="sizeGaugeEnds">
+        <span id="sizeGaugeMin">—</span><span id="sizeGaugeMax">—</span>
+      </div>
+      <div class="sizeGaugeNote" id="sizeGaugeNote"></div>
+    </div>
+    <div class="alrows">${rows}</div>
+    <p class="hint progWpmNote">${t('wpmNote')}</p>`;
 
   body.querySelectorAll('.alrow').forEach(c => c.addEventListener('click', () => {
     const i = +c.dataset.al;
@@ -739,6 +924,37 @@ function renderProgress() {
     const cls = classifyParashaSize(total, info);
     const badge = body.querySelector('#parashaSizeBadge');
     if (badge) { badge.textContent = t(PARASHA_SIZE_KEY[cls]); badge.className = 'parashaSizeBadge ' + cls; }
+    // graphic size indication: where this parasha falls on the shortest..longest span
+    const posPct = sizeGaugePos(total, info);
+    const avgPct = sizeGaugePos(info.avg, info);
+    const set = (id, fn) => { const el = body.querySelector(id); if (el) fn(el); };
+    set('#sizeGaugeFill', el => { el.style.width = posPct + '%'; el.className = 'sizeGaugeFill ' + cls; });
+    set('#sizeGaugeMark', el => { el.style.left = posPct + '%'; el.title = `${total} ${t('versesWord')}`; });
+    set('#sizeGaugeAvg', el => { el.style.left = avgPct + '%'; });
+    set('#sizeGaugeMin', el => { el.textContent = `${t('sizeShortest')} · ${info.min}`; });
+    set('#sizeGaugeAvgLbl', el => {
+      el.textContent = `${t('sizeAvg')} · ${info.avg}`;
+      el.style.left = avgPct + '%';
+    });
+    set('#sizeGaugeMax', el => { el.textContent = `${t('sizeLongest')} · ${info.max}`; });
+    set('#sizeGaugeNote', el => {
+      el.textContent = `${total} ${t('versesWord')} · ${t('longerThanPct', { pct: sizePercentile(total, info) })}`;
+    });
+  }).catch(() => {});
+
+  // reading-time estimates: per aliyah, and how much of the parasha is still ahead
+  Promise.all([getAliyahWords(), computeParashaProgress()]).then(([words, r]) => {
+    if (meta() !== r.meta) return;
+    let leftSec = 0;
+    for (let i = 0; i < n; i++) {
+      const w = words[i] || 0;
+      const left = p.a[i] ? 0 : w * (1 - (r.perAliyah[i] ? r.perAliyah[i].done / (r.perAliyah[i].count || 1) : 0));
+      leftSec += secondsForWords(left);
+      const el = body.querySelector(`[data-altime="${i}"]`);
+      if (el) el.textContent = '⏱ ' + fmtEstimate(secondsForWords(w));
+    }
+    const totalEl = body.querySelector('#parashaTimeLeft');
+    if (totalEl) totalEl.textContent = `⏱ ${t('timeLeftParasha')} ≈ ${fmtEstimate(leftSec)}`;
   }).catch(() => {});
 
   if (n === 8) {
@@ -908,7 +1124,9 @@ function applyAll() {
   $('setKeepAwake').checked = S.keepAwake;
   $('setAutoMark').checked = S.autoMark;
   $('setZenProgress').checked = S.zenProgress;
+  $('setZenTime').checked = S.zenTime;
   updateZenProgressVisibility();
+  updateZenTimeVisibility();
   updateZenMinimapVisibility();
   $('setReminder').checked = S.reminderOn;
   $('remDay').value = String(S.reminderDay);
@@ -1108,6 +1326,7 @@ function bindSettings() {
   $('setKeepAwake').addEventListener('change', ev => { S.keepAwake = ev.target.checked; saveSettings(); applyKeepAwake(); });
   $('setAutoMark').addEventListener('change', ev => { S.autoMark = ev.target.checked; saveSettings(); });
   $('setZenProgress').addEventListener('change', ev => { S.zenProgress = ev.target.checked; saveSettings(); updateZenProgressVisibility(); });
+  $('setZenTime').addEventListener('change', ev => { S.zenTime = ev.target.checked; saveSettings(); updateZenTimeVisibility(); paintTimeChip(); });
   document.querySelectorAll('input[name=font]').forEach(r => r.addEventListener('change', ev => {
     S.font = ev.target.value; saveSettings(); applyAll();
   }));
@@ -1148,6 +1367,7 @@ function toggleZen() {
     if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
   }
   updateZenProgressVisibility();
+  updateZenTimeVisibility();
   updateZenMinimapVisibility();
 }
 function updateZenProgressVisibility() {
@@ -1166,6 +1386,7 @@ function updateZenProgressVisibility() {
 const MINIMAP_MAX_TRACK_RATIO = .72;   // cap on how much of the viewport height the thumbnail may fill
 const MINIMAP_TEMP_COLLAPSE_MS = 2200; // auto-collapse delay for a drag-from-collapsed bloom
 const MINIMAP_DRAG_THRESHOLD = 8;      // px of movement before a press counts as a drag, not a tap
+const MINIMAP_MIN_FONT = 4;            // floor for the thumbnail's reflow font size
 let minimapDragging = false, minimapDidDrag = false, minimapStartedPinned = false;
 let minimapPointerStartY = 0, minimapCollapseTimer = 0;
 
@@ -1195,26 +1416,52 @@ function buildMinimapClone() {
   const cs = getComputedStyle(content);
   clone.style.fontFamily = cs.fontFamily;
   clone.style.fontSize = cs.fontSize;
-  clone.style.padding = cs.padding;
+  // padding in em so it stays proportional when the preview's font is shrunk below
+  clone.style.padding = '.26em .3em .6em';
+  // #content's own background comes from the `#content` id selector, which the clone loses
+  // when we strip its id — without this the preview is transparent and the track's dark
+  // translucent backdrop shows through, so the page reads *inverted*: plain mikra on dark,
+  // and only the targum (which carries its own background pill) on light.
+  clone.style.background = cs.backgroundColor;
+  clone.style.color = cs.color;
   // clientWidth (not scrollWidth!) — a single unbreakable run of maqaf-joined words can
   // overflow #content horizontally and inflate scrollWidth, which would shrink the scale
   // for the *entire* clone and leave most of it looking empty. clientWidth is always the
   // true reading-column width, so the preview reliably fills the track edge-to-edge.
   clone.style.width = content.clientWidth + 'px';
+  clone.style.height = 'auto';
   preview.innerHTML = '';
   preview.appendChild(clone);
+  return clone;
+}
+
+// The whole aliyah has to fit inside a strip a few dozen px wide — and at the reader's font
+// size a long aliyah is tens of thousands of pixels tall, an aspect ratio far taller than the
+// strip. Squashing it vertically to fit (what this used to do) is what made the preview's text
+// look absurdly wide. Instead, re-lay the thumbnail out at a *smaller font*: same page, same
+// proportions, just less of it per line — so the strip stays full-width and undistorted.
+// Height grows roughly with font², hence the sqrt step; two or three passes converge.
+function fitMinimapCloneFont(clone, scaleX, maxTrackH) {
+  let font = parseFloat(getComputedStyle(clone).fontSize) || 16;
+  for (let i = 0; i < 4; i++) {
+    const h = clone.offsetHeight || 1;
+    if (h * scaleX <= maxTrackH) break;
+    const next = Math.max(MINIMAP_MIN_FONT, font * Math.sqrt(maxTrackH / (h * scaleX)));
+    if (next >= font) break;
+    font = next;
+    clone.style.fontSize = font + 'px';
+    if (font <= MINIMAP_MIN_FONT) break;
+  }
 }
 
 // recompute the minimap's track height / scale / viewport-highlight box. `rebuild` also
 // refreshes the cloned text preview (needed after content or font-size changes / resize) —
 // skip it on plain scroll, which only has to move the viewport box.
 //
-// always shows the *whole* aliyah at a glance. The horizontal scale is fixed (width /
-// baseW) so the preview's "ink" always fills the track edge-to-edge, regardless of aliyah
-// length. The vertical scale is capped separately to fit the whole thing within maxTrackH —
-// for a very long aliyah (or a big font size) that means squashing lines vertically *more*
-// than horizontally, which distorts true letter shapes but keeps every verse visible as a
-// colored band, instead of shrinking both axes together into an invisible hairline.
+// always shows the *whole* aliyah at a glance, at a single **uniform** scale — the preview is
+// a true shrunk photo of a page, never stretched along one axis. What makes that possible for
+// a very long aliyah is fitMinimapCloneFont() above, which reflows the thumbnail at a smaller
+// font until it fits; the scale here only ever has to shrink both axes together.
 function syncMinimap(rebuild) {
   if (!document.body.classList.contains('zen')) return;
   const content = $('content');
@@ -1223,13 +1470,16 @@ function syncMinimap(rebuild) {
   const viewport = $('zenMinimapViewport');
   const baseW = content.clientWidth || 1;
   const scrollH = content.scrollHeight || 1;
-  if (rebuild || !preview.firstChild) buildMinimapClone();
 
   const expandedWidth = window.innerWidth >= 700 ? 76 : 58;
   const maxTrackH = window.innerHeight * MINIMAP_MAX_TRACK_RATIO;
   const scaleX = expandedWidth / baseW;
-  const trackH = Math.max(40, Math.round(Math.min(scrollH * scaleX, maxTrackH)));
-  const scaleY = trackH / scrollH;
+  if (rebuild || !preview.firstChild) fitMinimapCloneFont(buildMinimapClone(), scaleX, maxTrackH);
+
+  const cloneH = preview.firstChild.offsetHeight || 1;
+  const scale = Math.min(scaleX, maxTrackH / cloneH);
+  const trackH = Math.max(40, Math.round(cloneH * scale));
+  const inkW = Math.round(baseW * scale);
 
   const maxScroll = Math.max(1, content.scrollHeight - content.clientHeight);
   const ratio = Math.min(1, Math.max(0, content.scrollTop / maxScroll));
@@ -1237,11 +1487,21 @@ function syncMinimap(rebuild) {
   const vpTop = ratio * (trackH - vpH);
 
   track.style.height = trackH + 'px';
-  preview.style.transform = `scale(${scaleX}, ${scaleY})`;
+  preview.style.transform = `scale(${scale})`;
   preview.style.width = baseW + 'px';
-  preview.style.height = scrollH + 'px';
+  preview.style.height = cloneH + 'px';
+  // physical `right`, matching the stylesheet's own `right:0` / `transform-origin: top right`;
+  // keeps the thumbnail centred in the track if it ends up narrower than it
+  preview.style.right = Math.max(0, Math.round((expandedWidth - inkW) / 2)) + 'px';
   viewport.style.height = Math.round(vpH) + 'px';
   viewport.style.top = Math.round(vpTop) + 'px';
+}
+// tapping the text itself collapses the blown-up preview, exactly like its ✕ button
+function collapseMinimap() {
+  const mm = $('zenMinimap');
+  if (!mm.classList.contains('expanded') && !mm.classList.contains('pinned')) return;
+  clearTimeout(minimapCollapseTimer);
+  mm.classList.remove('expanded', 'pinned');
 }
 
 function minimapScrubTo(clientY) {
@@ -1323,10 +1583,9 @@ function bindUI() {
     if (minimapDidDrag) minimapScheduleTempCollapse();
     else $('zenMinimap').classList.add('pinned');
   });
-  $('zenMinimapClose').addEventListener('click', () => {
-    clearTimeout(minimapCollapseTimer);
-    $('zenMinimap').classList.remove('expanded', 'pinned');
-  });
+  $('zenMinimapClose').addEventListener('click', collapseMinimap);
+  // a tap anywhere on the text closes the preview too (same effect as the ✕)
+  $('content').addEventListener('pointerdown', collapseMinimap);
   window.addEventListener('resize', () => syncMinimap(true));
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     S.viewFilter = b.dataset.vf;
@@ -1336,6 +1595,7 @@ function bindUI() {
   let scrollT = 0;
   $('content').addEventListener('scroll', () => {
     updateScrollProgress();
+    paintTimeChipThrottled(200);
     syncMinimap();
     clearTimeout(scrollT);
     scrollT = setTimeout(() => {
@@ -1406,6 +1666,7 @@ const ABOUT_HTML = `
 <li>לוח פרשות ועליות: hebcal</li>
 </ul>
 <p>גופנים: פרנק-רוהל וכתר (Culmus), עזרא (SIL OFL).</p>
+<p class="hint">הערכת זמני הקריאה מבוססת על הכלל שבדקה אפשר לקרוא כ־200 מילים — חפץ חיים, קונטרס תורת הבית פרק ב׳. בזמן גלילה אוטומטית מוצג הזמן שנותר לגלילה עצמה, לפי מהירות הגלילה.</p>
 <p>הטקסטים נבדקו אך ייתכנו טעויות — נא לדווח. אין לסמוך על האפליקציה לקריאה בציבור.</p>`;
 
 // Unicode Hebrew cantillation (te'amim) combining marks, U+0591-U+05AA.

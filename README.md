@@ -39,10 +39,23 @@ Smart extras (based on user requests found in reviews/forums of existing apps):
   aliyah (or auto-mark on scroll-to-end), progress %, resume exactly where you left off
 - **Progress screen** — aliyah grid for the week, week streak, total parshiyot
   completed, verses left this week, history of recent weeks
+- **Reading-time estimates** — how long each aliyah takes and how much of the
+  parashah is still ahead, at 200 words a minute (חפץ חיים, קונטרס תורת הבית פ"ב).
+  Counts what you actually read with your current settings, so a doubled verse
+  counts twice and Onkelos/Rashi only count when shown. A chip on the reading
+  screen shows the time left in the current aliyah; while auto-scroll is running
+  it turns into a live countdown to the end of the scroll (that one is pure
+  arithmetic on the scroll speed, not the 200-words rule), and it can optionally
+  be shown in fullscreen too (off by default)
+- **Graphic parashah-size indicator** — where this week's parashah falls on the
+  shortest→longest span of all parshiyot, plus its percentile
 - **לוח קריאה יומי** — aliyah-per-day plan (Sunday=ראשון … Shabbat=שביעי) with a
   daily banner and one-tap jump
 - **View filter** — הכל / מקרא בלבד / תרגום בלבד (read all mikra first, then all targum)
 - **Vezot Haberakhah** appears in the schedule on Simchat Torah (IL/diaspora aware)
+- **Fullscreen aliyah preview** — a slim bar that blooms into an undistorted
+  thumbnail of the whole aliyah with your current position highlighted; scrub it
+  to move, close it with its ✕ or by tapping the text
 - Dark mode + sepia themes, keep-screen-on option
 
 ## Text sources
@@ -72,7 +85,7 @@ cd tools && npm install && npm run build-data   # writes web/data/*.json
 cd web && python3 -m http.server 8777   # open http://localhost:8777
 ```
 
-### Run the end-to-end tests (54 checks, Playwright)
+### Run the end-to-end tests (85 checks, Playwright)
 
 ```bash
 cd web && python3 -m http.server 8777 &
