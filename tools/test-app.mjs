@@ -193,9 +193,9 @@ const gauge = await page.evaluate(() => ({
   tickCount: document.querySelectorAll('#avgGaugeTicks .avgGaugeTick').length,
 }));
 // Matot-Masei is a doubled parasha => far longer than average, so the marker sits at the
-// right (long) end and the caption calls out the deviation, not the fill spanning from zero
+// right (long) end and the caption calls out the deviation
 check('avg gauge places Matot-Masei above average, at the long end', parseFloat(gauge.markLeft) === 100, gauge);
-check('avg gauge fill grows outward from the centre (average), not from the left edge', parseFloat(gauge.fillLeft) === 50, gauge);
+check('avg gauge fill grows from the track start, doubling as a bar-chart reading of length', parseFloat(gauge.fillLeft) === 0 && parseFloat(gauge.fillWidth) === 100, gauge);
 check('avg gauge fill and marker are colour-coded by tercile', gauge.fillCls.includes('long') && gauge.markCls.includes('long'), gauge);
 check('avg gauge caption states the deviation from average', /%/.test(gauge.caption) && /מעל הממוצע/.test(gauge.caption), gauge.caption);
 check('avg gauge shows a tick for every parasha (dot-plot of the whole distribution)', gauge.tickCount > 40, gauge.tickCount);

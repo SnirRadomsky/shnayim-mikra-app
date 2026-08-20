@@ -955,9 +955,12 @@ function renderProgress() {
     const markerPct = toPct(total);
     const pctDev = info.avg ? Math.round((total - info.avg) / info.avg * 100) : 0;
     const set = (id, fn) => { const el = body.querySelector(id); if (el) fn(el); };
+    // the fill bar grows from the track's start (not from the average) so its length is
+    // itself a reading of "how long is this parasha", the same way a bar chart would —
+    // the average tick and the tick cluster still carry the "relative to everyone" comparison
     set('#avgGaugeFill', el => {
-      el.style.left = Math.min(50, markerPct) + '%';
-      el.style.width = Math.abs(markerPct - 50) + '%';
+      el.style.left = '0%';
+      el.style.width = markerPct + '%';
       el.className = 'avgGaugeFill ' + cls;
     });
     // a faint tick for every other parasha's length, so the line reads as "here's everyone,
