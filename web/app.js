@@ -71,6 +71,9 @@ const STR = {
     sizeVsOthers: 'אורך הפרשה ביחס לשאר הפרשות',
     sizeShortest: 'הקצרה', sizeLongest: 'הארוכה', sizeAvg: 'ממוצע',
     longerThanPct: 'ארוכה מ־{pct}% מהפרשות',
+    aboveAvgPct: '{pct}% מעל הממוצע', belowAvgPct: '{pct}% מתחת לממוצע', atAvgExact: 'כממוצע בדיוק',
+    totalReadTime: 'זמן קריאה של כל הפרשה',
+    moreDetails: 'פרטים נוספים', lessDetails: 'הסתר פרטים',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -120,6 +123,9 @@ const STR = {
     sizeVsOthers: 'Length compared with the other parshiyot',
     sizeShortest: 'shortest', sizeLongest: 'longest', sizeAvg: 'average',
     longerThanPct: 'Longer than {pct}% of the parshiyot',
+    aboveAvgPct: '{pct}% above average', belowAvgPct: '{pct}% below average', atAvgExact: 'exactly average',
+    totalReadTime: 'Reading time for the whole parashah',
+    moreDetails: 'More details', lessDetails: 'Hide details',
   },
 };
 
@@ -563,11 +569,6 @@ async function getParashaSizeInfo() {
   };
   return parashaSizeInfo;
 }
-// where `total` sits on the min..max span of all parshiyot, as a 0..100 position
-function sizeGaugePos(total, info) {
-  const span = info.max - info.min;
-  return span > 0 ? Math.min(100, Math.max(0, (total - info.min) / span * 100)) : 50;
-}
 // share of parshiyot strictly shorter than `total`
 function sizePercentile(total, info) {
   if (!info.sorted.length) return 0;
@@ -688,6 +689,7 @@ function gotoParsha(idx, aliyah) {
   pos.loc = S.loc;
   savePos();
   renderReader();
+  showZenAliyahPop();
 }
 function gotoAliyah(a) {
   if (a < 0) {
@@ -702,6 +704,7 @@ function gotoAliyah(a) {
   pos.scroll = 0;
   savePos();
   renderReader();
+  showZenAliyahPop();
 }
 
 function onAliyahDone() {
@@ -867,20 +870,28 @@ function renderProgress() {
     </div>
     <h3 class="progweektitle">${m.he} <span class="parashaSizeBadge" id="parashaSizeBadge"></span></h3>
     <div class="progringsub" id="versesLeftN">…</div>
-    <div class="progringsub progTimeLeft" id="parashaTimeLeft">⏱ …</div>
-    <div class="sizeGauge" id="sizeGauge">
-      <div class="sizeGaugeTitle">${t('sizeVsOthers')}</div>
-      <div class="sizeGaugeTrack">
-        <div class="sizeGaugeFill" id="sizeGaugeFill"></div>
-        <div class="sizeGaugeAvg" id="sizeGaugeAvg"></div>
-        <div class="sizeGaugeMark" id="sizeGaugeMark"></div>
-        <div class="sizeGaugeAvgLbl" id="sizeGaugeAvgLbl">—</div>
+
+    <div class="lengthSection" id="lengthSection">
+      <div class="lengthTitle">${t('sizeVsOthers')}</div>
+      <div class="avgGaugeTrack">
+        <div class="avgGaugeFill" id="avgGaugeFill"></div>
+        <div class="avgGaugeTicks" id="avgGaugeTicks"></div>
+        <div class="avgGaugeMid"></div>
+        <div class="avgGaugeMidLbl">${t('sizeAvg')}</div>
+        <div class="avgGaugeMark" id="avgGaugeMark"></div>
       </div>
-      <div class="sizeGaugeEnds">
-        <span id="sizeGaugeMin">—</span><span id="sizeGaugeMax">—</span>
+      <div class="avgGaugeCaption" id="avgGaugeCaption">…</div>
+      <div class="lengthTotalTime" id="lengthTotalTime">⏱ …</div>
+      <button type="button" class="lengthDetailsToggle" id="lengthDetailsToggle" aria-expanded="false">${t('moreDetails')} ⌄</button>
+      <div class="lengthDetails hidden" id="lengthDetails">
+        <div class="sizeGaugeEnds">
+          <span id="sizeGaugeMin">—</span><span id="sizeGaugeMax">—</span>
+        </div>
+        <div class="sizeGaugeNote" id="sizeGaugeNote"></div>
       </div>
-      <div class="sizeGaugeNote" id="sizeGaugeNote"></div>
     </div>
+
+    <div class="progringsub progTimeLeft" id="parashaTimeLeft">⏱ …</div>
     <div class="alrows">${rows}</div>
     <p class="hint progWpmNote">${t('wpmNote')}</p>`;
 
@@ -891,6 +902,17 @@ function renderProgress() {
     renderProgress();
     updateProgressChip();
   }));
+
+  const lenToggle = body.querySelector('#lengthDetailsToggle');
+  const lenDetails = body.querySelector('#lengthDetails');
+  if (lenToggle && lenDetails) {
+    lenToggle.addEventListener('click', () => {
+      const open = lenDetails.classList.toggle('open');
+      lenDetails.classList.toggle('hidden', !open);
+      lenToggle.textContent = (open ? t('lessDetails') : t('moreDetails')) + (open ? ' ︿' : ' ⌄');
+      lenToggle.setAttribute('aria-expanded', String(open));
+    });
+  }
 
   computeParashaProgress().then(r => {
     if (meta() !== r.meta) return;
@@ -924,27 +946,53 @@ function renderProgress() {
     const cls = classifyParashaSize(total, info);
     const badge = body.querySelector('#parashaSizeBadge');
     if (badge) { badge.textContent = t(PARASHA_SIZE_KEY[cls]); badge.className = 'parashaSizeBadge ' + cls; }
-    // graphic size indication: where this parasha falls on the shortest..longest span
-    const posPct = sizeGaugePos(total, info);
-    const avgPct = sizeGaugePos(info.avg, info);
+
+    // average-relative gauge: centered on the average verse count across all parshiyot, so
+    // the average always sits at the exact middle of the track no matter how lopsided the
+    // shortest/longest parshiyot are on either side of it
+    const maxDev = Math.max(info.avg - info.min, info.max - info.avg) || 1;
+    const toPct = v => Math.min(100, Math.max(0, 50 + (v - info.avg) / maxDev * 50));
+    const markerPct = toPct(total);
+    const pctDev = info.avg ? Math.round((total - info.avg) / info.avg * 100) : 0;
     const set = (id, fn) => { const el = body.querySelector(id); if (el) fn(el); };
-    set('#sizeGaugeFill', el => { el.style.width = posPct + '%'; el.className = 'sizeGaugeFill ' + cls; });
-    set('#sizeGaugeMark', el => { el.style.left = posPct + '%'; el.title = `${total} ${t('versesWord')}`; });
-    set('#sizeGaugeAvg', el => { el.style.left = avgPct + '%'; });
-    set('#sizeGaugeMin', el => { el.textContent = `${t('sizeShortest')} · ${info.min}`; });
-    set('#sizeGaugeAvgLbl', el => {
-      el.textContent = `${t('sizeAvg')} · ${info.avg}`;
-      el.style.left = avgPct + '%';
+    // the fill bar grows from the track's start (not from the average) so its length is
+    // itself a reading of "how long is this parasha", the same way a bar chart would —
+    // the average tick and the tick cluster still carry the "relative to everyone" comparison
+    set('#avgGaugeFill', el => {
+      el.style.left = '0%';
+      el.style.width = markerPct + '%';
+      el.className = 'avgGaugeFill ' + cls;
     });
+    // a faint tick for every other parasha's length, so the line reads as "here's everyone,
+    // and here's you" instead of a lone dot between two anonymous endpoints
+    set('#avgGaugeTicks', el => {
+      el.innerHTML = info.sorted.map(v => `<span class="avgGaugeTick" style="left:${toPct(v)}%"></span>`).join('');
+    });
+    set('#avgGaugeMark', el => {
+      el.style.left = markerPct + '%';
+      el.title = `${total} ${t('versesWord')}`;
+      el.className = 'avgGaugeMark ' + cls;
+    });
+    set('#avgGaugeCaption', el => {
+      el.textContent = pctDev === 0 ? t('atAvgExact')
+        : pctDev > 0 ? t('aboveAvgPct', { pct: pctDev })
+        : t('belowAvgPct', { pct: Math.abs(pctDev) });
+    });
+    // collapsed by default: exact verse counts behind the graphic summary above
+    set('#sizeGaugeMin', el => { el.textContent = `${t('sizeShortest')} · ${info.min}`; });
     set('#sizeGaugeMax', el => { el.textContent = `${t('sizeLongest')} · ${info.max}`; });
     set('#sizeGaugeNote', el => {
       el.textContent = `${total} ${t('versesWord')} · ${t('longerThanPct', { pct: sizePercentile(total, info) })}`;
     });
   }).catch(() => {});
 
-  // reading-time estimates: per aliyah, and how much of the parasha is still ahead
+  // reading-time estimates: the whole parashah's length in minutes (a fixed fact, next to
+  // the verse-count gauge above), per-aliyah estimates, and how much is still ahead
   Promise.all([getAliyahWords(), computeParashaProgress()]).then(([words, r]) => {
     if (meta() !== r.meta) return;
+    const totalWords = words.slice(0, 7).reduce((s, w) => s + (w || 0), 0);
+    const totalTimeEl = body.querySelector('#lengthTotalTime');
+    if (totalTimeEl) totalTimeEl.textContent = `⏱ ${t('totalReadTime')}: ${fmtEstimate(secondsForWords(totalWords))}`;
     let leftSec = 0;
     for (let i = 0; i < n; i++) {
       const w = words[i] || 0;
@@ -1374,6 +1422,20 @@ function updateZenProgressVisibility() {
   $('zenProgress').classList.toggle('hidden', !(document.body.classList.contains('zen') && S.zenProgress));
 }
 
+// fullscreen (zen) hides the aliyah-name nav pill along with the rest of the chrome, so
+// landing on a new aliyah there is otherwise silent — flash its name center-screen for a
+// moment, then let it fade back out on its own.
+let zenAliyahPopTimer = 0;
+function showZenAliyahPop() {
+  if (!document.body.classList.contains('zen')) return;
+  const el = $('zenAliyahPop');
+  if (!el) return;
+  el.textContent = (S.lang === 'he' ? ALIYAH_HE : ALIYAH_EN)[pos.aliyah];
+  el.classList.add('show');
+  clearTimeout(zenAliyahPopTimer);
+  zenAliyahPopTimer = setTimeout(() => el.classList.remove('show'), 1600);
+}
+
 // ---------------------------------------------------------------- zen minimap
 // A "how big is this aliyah, and where am I in it" indicator, always shown in fullscreen
 // (zen) mode: a slim, mostly-transparent bar that blooms — VS Code minimap style — into a
@@ -1584,8 +1646,11 @@ function bindUI() {
     else $('zenMinimap').classList.add('pinned');
   });
   $('zenMinimapClose').addEventListener('click', collapseMinimap);
-  // a tap anywhere on the text closes the preview too (same effect as the ✕)
-  $('content').addEventListener('pointerdown', collapseMinimap);
+  // a tap anywhere on the text closes the preview too (same effect as the ✕). This has to be
+  // 'click', not 'pointerdown' — pointerdown also fires at the start of a scroll/drag gesture,
+  // which used to collapse the preview the instant you tried to scroll past it. 'click' is
+  // only synthesized by the browser for an actual tap (no scroll happened in between).
+  $('content').addEventListener('click', collapseMinimap);
   window.addEventListener('resize', () => syncMinimap(true));
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     S.viewFilter = b.dataset.vf;

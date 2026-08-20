@@ -174,19 +174,40 @@ check('parasha time-left shown, and less than the whole parasha (rishon+sheni do
   /נותר לפרשה/.test(parashaLeft) && /\d/.test(parashaLeft), parashaLeft);
 check('reading-speed source credited on the progress page',
   /200/.test(await page.textContent('.progWpmNote')) && /חפץ חיים/.test(await page.textContent('.progWpmNote')));
+
+// length section: total reading time is a fixed fact (not "left"), shown next to the gauge
+await page.waitForFunction(() => /\d/.test(document.getElementById('lengthTotalTime').textContent));
+const totalTime = await page.textContent('#lengthTotalTime');
+check('whole-parasha reading time shown next to the length gauge', /\d/.test(totalTime), totalTime);
+
+// average-relative gauge: only the line + caption + total time are visible by default;
+// the exact verse counts are tucked behind a "more details" toggle
+check('length details start collapsed', await page.$eval('#lengthDetails', el => el.classList.contains('hidden')));
 const gauge = await page.evaluate(() => ({
-  fillPct: document.getElementById('sizeGaugeFill').style.width,
-  markLeft: document.getElementById('sizeGaugeMark').style.left,
-  note: document.getElementById('sizeGaugeNote').textContent,
-  min: document.getElementById('sizeGaugeMin').textContent,
-  max: document.getElementById('sizeGaugeMax').textContent,
-  cls: document.getElementById('sizeGaugeFill').className,
+  fillLeft: document.getElementById('avgGaugeFill').style.left,
+  fillWidth: document.getElementById('avgGaugeFill').style.width,
+  markLeft: document.getElementById('avgGaugeMark').style.left,
+  caption: document.getElementById('avgGaugeCaption').textContent,
+  fillCls: document.getElementById('avgGaugeFill').className,
+  markCls: document.getElementById('avgGaugeMark').className,
+  tickCount: document.querySelectorAll('#avgGaugeTicks .avgGaugeTick').length,
 }));
-// Matot-Masei is a doubled parasha => the longest of them all, so the marker sits at the far end
-check('size gauge places Matot-Masei at the long end', parseFloat(gauge.markLeft) === 100, gauge);
-check('size gauge is colour-coded by tercile', gauge.cls.includes('long'), gauge.cls);
-check('size gauge labels the shortest/longest parasha', /\d/.test(gauge.min) && /244/.test(gauge.max), gauge);
-check('size gauge notes the percentile', /244/.test(gauge.note) && /%/.test(gauge.note), gauge.note);
+// Matot-Masei is a doubled parasha => far longer than average, so the marker sits at the
+// right (long) end and the caption calls out the deviation
+check('avg gauge places Matot-Masei above average, at the long end', parseFloat(gauge.markLeft) === 100, gauge);
+check('avg gauge fill grows from the track start, doubling as a bar-chart reading of length', parseFloat(gauge.fillLeft) === 0 && parseFloat(gauge.fillWidth) === 100, gauge);
+check('avg gauge fill and marker are colour-coded by tercile', gauge.fillCls.includes('long') && gauge.markCls.includes('long'), gauge);
+check('avg gauge caption states the deviation from average', /%/.test(gauge.caption) && /מעל הממוצע/.test(gauge.caption), gauge.caption);
+check('avg gauge shows a tick for every parasha (dot-plot of the whole distribution)', gauge.tickCount > 40, gauge.tickCount);
+await page.click('#lengthDetailsToggle');
+await page.waitForTimeout(150);
+check('details toggle reveals the exact verse counts', !(await page.$eval('#lengthDetails', el => el.classList.contains('hidden'))));
+const min = await page.textContent('#sizeGaugeMin'), max = await page.textContent('#sizeGaugeMax'), note = await page.textContent('#sizeGaugeNote');
+check('size gauge labels the shortest/longest parasha', /\d/.test(min) && /244/.test(max), { min, max });
+check('size gauge notes the percentile', /244/.test(note) && /%/.test(note), note);
+await page.click('#lengthDetailsToggle');
+await page.waitForTimeout(150);
+check('details toggle collapses again', await page.$eval('#lengthDetails', el => el.classList.contains('hidden')));
 await page.screenshot({ path: SHOTS + '/05-progress.png' });
 await page.click('#progressPage .pageback');
 
@@ -381,6 +402,39 @@ await page.mouse.click(220, 500); // tap the text itself
 await page.waitForTimeout(250);
 const mmCls = await page.$eval('#zenMinimap', el => el.className);
 check('tapping the text collapses the preview (like the ✕)', !/expanded|pinned/.test(mmCls), mmCls);
+
+console.log('== 9b2. scrolling the preview must not collapse it (regression: pointerdown -> click) ==');
+await page.evaluate(() => document.getElementById('zenMinimap').classList.add('expanded', 'pinned'));
+await page.waitForTimeout(200);
+// the start of a scroll/drag gesture fires pointerdown just like a tap does, but never fires
+// a 'click' unless the pointer stays put — simulate exactly that sequence
+await page.evaluate(() => {
+  const c = document.getElementById('content');
+  const rect = c.getBoundingClientRect();
+  const x = rect.left + rect.width / 2, y = rect.top + 40;
+  c.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y }));
+  c.scrollTop += 300;
+  c.dispatchEvent(new Event('scroll', { bubbles: true }));
+  c.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: x, clientY: y }));
+});
+await page.waitForTimeout(200);
+check('scrolling the content does not collapse the pinned preview',
+  /expanded/.test(await page.$eval('#zenMinimap', el => el.className)) && /pinned/.test(await page.$eval('#zenMinimap', el => el.className)));
+await page.evaluate(() => document.getElementById('zenMinimap').classList.remove('expanded', 'pinned'));
+
+console.log('== 9b3. zen mode flashes the aliyah name after navigating, then it fades out ==');
+const aliyahBefore = (await page.textContent('#aliyahName')).trim();
+await page.$eval('#btnAliyahDone', el => el.scrollIntoView());
+await page.click('#btnAliyahDone');
+await page.waitForTimeout(150);
+check('zen popup appears when the aliyah changes',
+  await page.$eval('#zenAliyahPop', el => el.classList.contains('show')));
+const popText = (await page.textContent('#zenAliyahPop')).trim();
+const aliyahAfter = (await page.textContent('#aliyahName')).trim();
+check('zen popup names the aliyah just reached', popText === aliyahAfter && popText !== aliyahBefore, { popText, aliyahBefore, aliyahAfter });
+await page.waitForTimeout(1800);
+check('zen popup fades back out on its own',
+  !(await page.$eval('#zenAliyahPop', el => el.classList.contains('show'))));
 
 console.log('== 9c. fullscreen time-left readout (off by default) ==');
 check('fullscreen time readout hidden by default', !(await page.isVisible('#zenTime')));

@@ -340,37 +340,60 @@ html[data-theme="dark"] .alrowfill { background: #8db8e8; }
 .alrowmeta { display: flex; justify-content: space-between; gap: 10px; margin-top: 5px; }
 .alrowverses, .alrowtime { font-size: .78rem; color: #888; }
 .alrowtime { font-variant-numeric: tabular-nums; }
-.progTimeLeft { margin-top: -14px; }
+.progTimeLeft { margin: 4px 0 18px; font-weight: 700; }
+html[data-theme="dark"] .progTimeLeft { color: #8db8e8; }
+html:not([data-theme="dark"]) .progTimeLeft { color: var(--blue); }
 .progWpmNote { text-align: center; padding: 0 20px; }
 
-/* ===== progress page: how long this parasha is compared with all the others ===== */
-.sizeGauge { padding: 0 20px 22px; }
-.sizeGaugeTitle { text-align: center; font-size: .85rem; color: #888; margin-bottom: 8px; }
-.sizeGaugeTrack {
+/* ===== progress page: how long this parasha is compared with all the others — a single
+   glance-able line (marker position + one caption), with the exact numbers tucked behind a
+   "more details" toggle so the page isn't cluttered with figures nobody asked for ===== */
+.lengthSection { padding: 0 20px 22px; }
+.lengthTitle { text-align: center; font-size: .85rem; color: #888; margin-bottom: 8px; }
+.avgGaugeTrack {
   position: relative; height: 12px; border-radius: 6px; background: var(--chip);
-  /* the span itself is a "short → long" axis, so it reads left-to-right in both UI languages */
+  /* the average sits at the exact middle, shorter-than-average to its left, longer to its
+     right — a fixed left→right axis regardless of UI language */
   direction: ltr;
 }
-.sizeGaugeFill { position: absolute; top: 0; bottom: 0; left: 0; width: 0%; border-radius: 6px; background: var(--navy2); transition: width .4s ease; }
-.sizeGaugeFill.short { background: #3e7d47; }
-.sizeGaugeFill.medium { background: #c08a2d; }
-.sizeGaugeFill.long { background: #b6432f; }
-.sizeGaugeAvg {
+.avgGaugeFill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0%; border-radius: 6px; background: var(--navy2); opacity: .4; transition: left .4s ease, width .4s ease; }
+.avgGaugeFill.short { background: #3e7d47; }
+.avgGaugeFill.medium { background: #c08a2d; }
+.avgGaugeFill.long { background: #b6432f; }
+/* a faint tick for every parasha's length — a dot-plot of the whole distribution, so the
+   marker below reads as "here, among everyone" rather than a lone dot on a bare line */
+.avgGaugeTicks { position: absolute; inset: 0; }
+.avgGaugeTick {
+  position: absolute; top: 2px; bottom: 2px; width: 2px; border-radius: 1px;
+  background: var(--ink); opacity: .3; transform: translateX(-50%);
+}
+.avgGaugeMid {
   position: absolute; top: -5px; bottom: -5px; left: 50%; width: 2px;
   background: var(--ink); opacity: .4;
 }
-.sizeGaugeMark {
-  position: absolute; top: 50%; left: 0; width: 16px; height: 16px; border-radius: 50%;
-  transform: translate(-50%, -50%); background: var(--paper); border: 3px solid var(--ink);
-  transition: left .4s ease;
+.avgGaugeMark {
+  position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: var(--ink); border: 3px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--line); transition: left .4s ease; z-index: 2;
 }
-.sizeGaugeAvgLbl {
+.avgGaugeMark.short { background: #3e7d47; }
+.avgGaugeMark.medium { background: #c08a2d; }
+.avgGaugeMark.long { background: #b6432f; }
+.avgGaugeMidLbl {
   position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
   font-size: .7rem; color: #888; white-space: nowrap;
 }
+.avgGaugeCaption { text-align: center; font-size: .9rem; margin-top: 22px; font-weight: 700; }
+.lengthTotalTime { text-align: center; font-size: .85rem; color: #888; margin-top: 6px; }
+.lengthDetailsToggle {
+  display: block; margin: 10px auto 0; background: none; border: none; color: var(--blue);
+  font-family: inherit; font-size: .82rem; cursor: pointer; padding: 4px 8px;
+}
+html[data-theme="dark"] .lengthDetailsToggle { color: #8db8e8; }
+.lengthDetails { margin-top: 10px; }
 .sizeGaugeEnds {
   display: flex; justify-content: space-between; direction: ltr;
-  font-size: .72rem; color: #888; margin-top: 20px;
+  font-size: .72rem; color: #888;
 }
 .sizeGaugeNote { text-align: center; font-size: .82rem; margin-top: 8px; font-weight: 700; }
 .alrow.done { border-color: #3e7d47; }
@@ -441,6 +464,17 @@ html[data-theme="dark"] .alrowfill { background: #8db8e8; }
   font-size: .95rem; font-variant-numeric: tabular-nums; pointer-events: none;
 }
 .zentime.live { background: rgba(47,142,247,.8); }
+
+/* flashes the aliyah name center-screen for a moment after navigating in fullscreen, where
+   the aliyah nav pill (which would otherwise show this) is hidden along with the rest of the
+   chrome */
+.zenaliyahpop {
+  position: fixed; top: 16%; left: 50%; z-index: 62;
+  transform: translate(-50%, -8px); background: rgba(0,0,0,.6); color: #fff;
+  padding: 10px 26px; border-radius: 14px; font-size: 1.15rem; font-weight: 700;
+  opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease;
+}
+.zenaliyahpop.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ===== zen minimap: "how big is this aliyah, and where in it am I" ===== */
 .zenminimap {
