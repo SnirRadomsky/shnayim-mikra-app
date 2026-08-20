@@ -356,19 +356,29 @@ html:not([data-theme="dark"]) .progTimeLeft { color: var(--blue); }
      right — a fixed left→right axis regardless of UI language */
   direction: ltr;
 }
-.avgGaugeFill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0%; border-radius: 6px; background: var(--navy2); transition: left .4s ease, width .4s ease; }
+.avgGaugeFill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0%; border-radius: 6px; background: var(--navy2); opacity: .4; transition: left .4s ease, width .4s ease; }
 .avgGaugeFill.short { background: #3e7d47; }
 .avgGaugeFill.medium { background: #c08a2d; }
 .avgGaugeFill.long { background: #b6432f; }
+/* a faint tick for every parasha's length — a dot-plot of the whole distribution, so the
+   marker below reads as "here, among everyone" rather than a lone dot on a bare line */
+.avgGaugeTicks { position: absolute; inset: 0; }
+.avgGaugeTick {
+  position: absolute; top: 2px; bottom: 2px; width: 2px; border-radius: 1px;
+  background: var(--ink); opacity: .3; transform: translateX(-50%);
+}
 .avgGaugeMid {
   position: absolute; top: -5px; bottom: -5px; left: 50%; width: 2px;
   background: var(--ink); opacity: .4;
 }
 .avgGaugeMark {
-  position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; border-radius: 50%;
-  transform: translate(-50%, -50%); background: var(--paper); border: 3px solid var(--ink);
-  transition: left .4s ease;
+  position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: var(--ink); border: 3px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--line); transition: left .4s ease; z-index: 2;
 }
+.avgGaugeMark.short { background: #3e7d47; }
+.avgGaugeMark.medium { background: #c08a2d; }
+.avgGaugeMark.long { background: #b6432f; }
 .avgGaugeMidLbl {
   position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
   font-size: .7rem; color: #888; white-space: nowrap;

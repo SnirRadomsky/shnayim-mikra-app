@@ -875,6 +875,7 @@ function renderProgress() {
       <div class="lengthTitle">${t('sizeVsOthers')}</div>
       <div class="avgGaugeTrack">
         <div class="avgGaugeFill" id="avgGaugeFill"></div>
+        <div class="avgGaugeTicks" id="avgGaugeTicks"></div>
         <div class="avgGaugeMid"></div>
         <div class="avgGaugeMidLbl">${t('sizeAvg')}</div>
         <div class="avgGaugeMark" id="avgGaugeMark"></div>
@@ -950,7 +951,8 @@ function renderProgress() {
     // the average always sits at the exact middle of the track no matter how lopsided the
     // shortest/longest parshiyot are on either side of it
     const maxDev = Math.max(info.avg - info.min, info.max - info.avg) || 1;
-    const markerPct = Math.min(100, Math.max(0, 50 + (total - info.avg) / maxDev * 50));
+    const toPct = v => Math.min(100, Math.max(0, 50 + (v - info.avg) / maxDev * 50));
+    const markerPct = toPct(total);
     const pctDev = info.avg ? Math.round((total - info.avg) / info.avg * 100) : 0;
     const set = (id, fn) => { const el = body.querySelector(id); if (el) fn(el); };
     set('#avgGaugeFill', el => {
@@ -958,7 +960,16 @@ function renderProgress() {
       el.style.width = Math.abs(markerPct - 50) + '%';
       el.className = 'avgGaugeFill ' + cls;
     });
-    set('#avgGaugeMark', el => { el.style.left = markerPct + '%'; el.title = `${total} ${t('versesWord')}`; });
+    // a faint tick for every other parasha's length, so the line reads as "here's everyone,
+    // and here's you" instead of a lone dot between two anonymous endpoints
+    set('#avgGaugeTicks', el => {
+      el.innerHTML = info.sorted.map(v => `<span class="avgGaugeTick" style="left:${toPct(v)}%"></span>`).join('');
+    });
+    set('#avgGaugeMark', el => {
+      el.style.left = markerPct + '%';
+      el.title = `${total} ${t('versesWord')}`;
+      el.className = 'avgGaugeMark ' + cls;
+    });
     set('#avgGaugeCaption', el => {
       el.textContent = pctDev === 0 ? t('atAvgExact')
         : pctDev > 0 ? t('aboveAvgPct', { pct: pctDev })

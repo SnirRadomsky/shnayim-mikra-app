@@ -188,14 +188,17 @@ const gauge = await page.evaluate(() => ({
   fillWidth: document.getElementById('avgGaugeFill').style.width,
   markLeft: document.getElementById('avgGaugeMark').style.left,
   caption: document.getElementById('avgGaugeCaption').textContent,
-  cls: document.getElementById('avgGaugeFill').className,
+  fillCls: document.getElementById('avgGaugeFill').className,
+  markCls: document.getElementById('avgGaugeMark').className,
+  tickCount: document.querySelectorAll('#avgGaugeTicks .avgGaugeTick').length,
 }));
 // Matot-Masei is a doubled parasha => far longer than average, so the marker sits at the
 // right (long) end and the caption calls out the deviation, not the fill spanning from zero
 check('avg gauge places Matot-Masei above average, at the long end', parseFloat(gauge.markLeft) === 100, gauge);
 check('avg gauge fill grows outward from the centre (average), not from the left edge', parseFloat(gauge.fillLeft) === 50, gauge);
-check('avg gauge is colour-coded by tercile', gauge.cls.includes('long'), gauge.cls);
+check('avg gauge fill and marker are colour-coded by tercile', gauge.fillCls.includes('long') && gauge.markCls.includes('long'), gauge);
 check('avg gauge caption states the deviation from average', /%/.test(gauge.caption) && /מעל הממוצע/.test(gauge.caption), gauge.caption);
+check('avg gauge shows a tick for every parasha (dot-plot of the whole distribution)', gauge.tickCount > 40, gauge.tickCount);
 await page.click('#lengthDetailsToggle');
 await page.waitForTimeout(150);
 check('details toggle reveals the exact verse counts', !(await page.$eval('#lengthDetails', el => el.classList.contains('hidden'))));
