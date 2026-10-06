@@ -271,6 +271,12 @@ await page.click('#speedDown'); await page.click('#speedDown'); await page.click
 
 console.log('== 7. colors / theme / font / filters ==');
 await page.click('#btnMenu'); await page.click('#miSettings');
+// defaults: sepia theme, Ezra font, font size 50, speed 50
+check('default theme is sepia', await page.$eval('html', el => el.dataset.theme) === 'sepia');
+check('default font is Ezra', await page.$eval('body', el => el.dataset.font) === 'ezra');
+check('default font size is 50', (await page.textContent('#fontVal')) === '50');
+// the rest of this section exercises per-theme colors, starting from the light theme
+await page.click('#segTheme [data-val=light]');
 // custom color picker (replaces the old native <input type=color>)
 await page.click('#colOnkelos');
 await page.waitForSelector('#colorPickerModal:not(.hidden)');
