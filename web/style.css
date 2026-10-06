@@ -627,3 +627,4 @@ html[data-theme="dark"] .playbtn { border: none; color: #101116; background: lin
   content: ""; flex: 1; height: 1px;
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mikra) 35%, transparent), transparent);
 }
+.colorpick, .cpRecentSwatch { transition: none; }
