@@ -45,8 +45,14 @@ Smart extras (based on user requests found in reviews/forums of existing apps):
   counts twice and Onkelos/Rashi only count when shown. A chip on the reading
   screen shows the time left in the current aliyah; while auto-scroll is running
   it turns into a live countdown to the end of the scroll (that one is pure
-  arithmetic on the scroll speed, not the 200-words rule), and it can optionally
-  be shown in fullscreen too (off by default)
+  arithmetic on the scroll speed, not the 200-words rule). It can optionally
+  be shown in fullscreen too (off by default), where it always shows the
+  auto-scroll clock — paused, it just stops ticking instead of jumping to the
+  200-words estimate
+- **Parashah facts vs. your progress** — the weekly page has two separate cards:
+  *על הפרשה* (verse count, the Masoretic note — e.g. קמ"ו, סימן אמצי"ה — total
+  reading time, size vs. the other parshiyot) and *ההתקדמות שלך* (ring, a single
+  "left to read" box with verses / time / %, per-aliyah rows)
 - **Graphic parashah-size indicator** — where this week's parashah falls on the
   shortest→longest span of all parshiyot, plus its percentile
 - **לוח קריאה יומי** — aliyah-per-day plan (Sunday=ראשון … Shabbat=שביעי) with a
@@ -54,7 +60,8 @@ Smart extras (based on user requests found in reviews/forums of existing apps):
 - **View filter** — הכל / מקרא בלבד / תרגום בלבד (read all mikra first, then all targum)
 - **Vezot Haberakhah** appears in the schedule on Simchat Torah (IL/diaspora aware)
 - **Fullscreen aliyah preview** — a slim bar that blooms into an undistorted
-  thumbnail of the whole aliyah with your current position highlighted; scrub it
+  thumbnail of the whole aliyah (slightly see-through, so the text under it still
+  shows) with your current position highlighted; scrub it
   to move, close it with its ✕ or by tapping the text
 - Dark mode + sepia themes, keep-screen-on option
 
