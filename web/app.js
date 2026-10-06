@@ -130,11 +130,11 @@ const STR = {
 };
 
 const DEFAULTS = {
-  onkelos: true, rashi: false, fontSize: 54, speed: 55, mode: 'pasuk',
+  onkelos: true, rashi: false, fontSize: 50, speed: 50, mode: 'pasuk',
   teamim: 'with', haftara: 'without', minhag: 'seph', twice: 'twice', lang: 'he',
-  colors: { light: {}, dark: {}, sepia: {} }, theme: 'light', loc: 'il',
+  colors: { light: {}, dark: {}, sepia: {} }, theme: 'sepia', loc: 'il',
   reminderOn: false, reminderDay: 4, reminderTime: '20:00',
-  font: 'frank', scrollbar: 'yes', autoAdvance: 'yes',
+  font: 'ezra', scrollbar: 'yes', autoAdvance: 'yes',
   dailyPlan: false, keepAwake: true, autoMark: true, viewFilter: 'all',
   targumBg: 'yes', zenProgress: false, zenTime: false,
 };
@@ -144,8 +144,18 @@ const DEFAULTS = {
 const WORDS_PER_MINUTE = 200;
 
 // ---------------------------------------------------------------- state
-let S = loadJSON('sm_settings', {});
-S = Object.assign({}, DEFAULTS, S);
+// Speed 50 (the middle of the 1–100 scale) is ~38 px/s; every ±22 steps doubles / halves it.
+const SPEED_MID_PX = 38.4, SPEED_OCTAVE = 22;
+const savedSettings = loadJSON('sm_settings', {});
+let S = Object.assign({}, DEFAULTS, savedSettings);
+// the speed scale was re-centred (old 18 == new 50): carry a saved speed over to the new scale
+if (!S.speedScale) {
+  if (typeof savedSettings.speed === 'number') {
+    const oldPx = 6 + savedSettings.speed * 1.8;
+    S.speed = Math.max(1, Math.min(100, Math.round(50 + SPEED_OCTAVE * Math.log2(oldPx / SPEED_MID_PX))));
+  }
+  S.speedScale = 2;
+}
 // colors used to be one flat set shared by every theme, which caused dark-mode text to
 // become invisible if a dark-ish color was picked while in light theme (it "stuck" across
 // themes). Migrate any old flat shape into a per-theme {light,dark,sepia} structure.
@@ -740,7 +750,7 @@ function markAliyahDoneQuiet() {
 }
 
 // ---------------------------------------------------------------- auto scroll
-function pxPerSec() { return 6 + S.speed * 1.8; }
+function pxPerSec() { return SPEED_MID_PX * Math.pow(2, (S.speed - 50) / SPEED_OCTAVE); }
 function setPlayButtonsState(playing) {
   [$('btnPlay'), $('zenPlayBtn')].forEach(b => {
     if (!b) return;
