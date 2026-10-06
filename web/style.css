@@ -316,7 +316,7 @@ html[data-theme="dark"] .progRingFill { stroke: #8db8e8; }
   font-size: 1.7rem; font-weight: 700; background: var(--bg); border-radius: 50%;
   width: 74px; height: 74px; display: flex; align-items: center; justify-content: center;
 }
-.progweektitle { text-align: center; margin: 4px 0 2px; }
+.progweektitle { text-align: center; margin: 16px 0 12px; }
 .parashaSizeBadge {
   display: inline-block; margin: 0 6px; padding: 3px 10px; border-radius: 20px;
   font-size: .7rem; font-weight: 700; vertical-align: middle; color: #fff;
@@ -344,6 +344,46 @@ html[data-theme="dark"] .alrowfill { background: #8db8e8; }
 html[data-theme="dark"] .progTimeLeft { color: #8db8e8; }
 html:not([data-theme="dark"]) .progTimeLeft { color: var(--blue); }
 .progWpmNote { text-align: center; padding: 0 20px; }
+
+/* the weekly page is split into two cards so the parasha's own facts (verse count, the
+   Masoretic note, its length vs the others) never mix with your reading progress */
+.progCard {
+  margin: 0 14px 16px; padding: 14px 0 6px; border-radius: 16px;
+  background: var(--paper); box-shadow: 0 0 0 1px var(--line), 0 2px 8px -4px rgba(0,0,0,.18);
+}
+.progCardHead {
+  text-align: center; font-size: .78rem; font-weight: 700; letter-spacing: .04em;
+  color: #888; margin-bottom: 6px;
+}
+.factsTop { text-align: center; padding: 0 16px; }
+.factBig { line-height: 1.1; }
+.factNum { font-size: 2.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.factUnit { font-size: 1.05rem; color: #888; }
+.factMasorah { margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.masorahLine {
+  display: inline-block; padding: 3px 12px; border-radius: 999px;
+  background: var(--chip); font-size: .92rem;
+}
+.masorahName { color: #888; }
+.masorahNum { font-weight: 700; }
+.masorahSep { color: #888; }
+.factsCard .lengthTotalTime { margin: 10px 0 14px; }
+.factsCard .lengthSection { border-top: 1px solid var(--line); padding-top: 14px; }
+
+/* "left to read": the three ways of saying how much is still ahead, side by side */
+.leftBox {
+  margin: 8px 16px 14px; padding: 10px 6px 8px; border-radius: 12px;
+  background: rgba(47,142,247,.09); box-shadow: inset 0 0 0 1px rgba(47,142,247,.28);
+}
+.leftBoxTitle { text-align: center; font-size: .82rem; font-weight: 700; color: var(--blue); margin-bottom: 6px; }
+html[data-theme="dark"] .leftBoxTitle { color: #8db8e8; }
+.leftStats { display: flex; }
+.leftStat { flex: 1; text-align: center; }
+.leftStat + .leftStat { border-inline-start: 1px solid rgba(47,142,247,.25); }
+.leftStatN { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.leftStatL { font-size: .74rem; color: #888; }
+.myProgCard .progCombo { margin-top: 8px; }
+.myProgCard .alrows { padding: 0 14px 12px; }
 
 /* ===== progress page: how long this parasha is compared with all the others — a single
    glance-able line (marker position + one caption), with the exact numbers tucked behind a
@@ -482,7 +522,9 @@ html[data-theme="dark"] .lengthDetailsToggle { color: #8db8e8; }
   transform: translateY(-50%);
   opacity: .35; transition: opacity .3s ease;
 }
-.zenminimap.expanded { opacity: 1; }
+/* expanded, it floats over the text it summarises — slightly see-through so the reading
+   column underneath is never completely hidden */
+.zenminimap.expanded { opacity: .68; }
 .zenminimaptrack {
   position: relative; width: 9px; border-radius: 5px; overflow: hidden;
   background: rgba(120,120,130,.35); cursor: pointer; touch-action: none;

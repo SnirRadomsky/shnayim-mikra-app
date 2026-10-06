@@ -74,6 +74,8 @@ const STR = {
     aboveAvgPct: '{pct}% מעל הממוצע', belowAvgPct: '{pct}% מתחת לממוצע', atAvgExact: 'כממוצע בדיוק',
     totalReadTime: 'זמן קריאה של כל הפרשה',
     moreDetails: 'פרטים נוספים', lessDetails: 'הסתר פרטים',
+    aboutParasha: 'על הפרשה', myProgress: 'ההתקדמות שלך', leftToRead: 'נותר לקרוא',
+    ofParasha: 'מהפרשה', masorahSiman: 'סימן',
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
@@ -126,6 +128,8 @@ const STR = {
     aboveAvgPct: '{pct}% above average', belowAvgPct: '{pct}% below average', atAvgExact: 'exactly average',
     totalReadTime: 'Reading time for the whole parashah',
     moreDetails: 'More details', lessDetails: 'Hide details',
+    aboutParasha: 'About the parashah', myProgress: 'Your progress', leftToRead: 'Left to read',
+    ofParasha: 'of the parashah', masorahSiman: 'mnemonic',
   },
 };
 
@@ -591,6 +595,25 @@ function classifyParashaSize(total, info) {
 }
 const PARASHA_SIZE_KEY = { short: 'parashaSizeShort', medium: 'parashaSizeMedium', long: 'parashaSizeLong' };
 
+// The Masoretic note printed at the end of every parasha: its verse count in Hebrew
+// numerals, and the mnemonic (סימן) the Masorah gives for it — e.g. Bereshit: קמ"ו, אמצי"ה.
+// A doubled parasha (Matot-Masei…) shows each half's own note.
+const MASORAH = {
+  /*MASORAH_DATA*/
+};
+function masorahParts(key) {
+  if (MASORAH[key]) return [{ key, ...MASORAH[key] }];
+  return key.split('-').filter(k => MASORAH[k]).map(k => ({ key: k, ...MASORAH[k] }));
+}
+function masorahHTML(key) {
+  const parts = masorahParts(key);
+  if (!parts.length) return '';
+  const many = parts.length > 1;
+  return parts.map(p => `<div class="masorahLine">${many ? `<span class="masorahName">${esc(PARSHIYOT[p.key] ? PARSHIYOT[p.key].he : p.key)}:</span> ` : ''}`
+    + `<span class="masorahNum">${esc(p.nHe)}</span>`
+    + `<span class="masorahSep"> · </span><span class="masorahSiman">${t('masorahSiman')} <b>${esc(p.siman)}</b></span></div>`).join('');
+}
+
 // verse-level progress across the whole parasha (all 7 aliyot) — a bookmark gives its
 // (not-yet-done) aliyah partial credit up to that verse. Shared by the reader's progress
 // chip and the weekly Progress page's ring + per-aliyah bars, so they always agree.
@@ -627,6 +650,8 @@ async function updateProgressChip() {
 //                     viewport, at 200 words a minute.
 //   * auto-scrolling — a live countdown: pixels left to scroll / the current scroll speed,
 //                     i.e. when the automatic scroll will actually reach the end.
+// The fullscreen readout only ever shows the second one (paused, it's what's left at the
+// current scroll speed).
 let curAliyahWords = 0;   // word count of the aliyah currently on screen
 let lastTimeChipPaint = 0;
 
@@ -643,17 +668,20 @@ function autoScrollSecondsLeft() {
   return left / pxPerSec();
 }
 function paintTimeChip() {
-  const txt = scrolling
-    ? '▶ ' + fmtClock(autoScrollSecondsLeft())
-    : '⏱ ' + fmtEstimate(secondsForWords(curAliyahWords * (1 - readFraction())));
+  const scrollClock = fmtClock(autoScrollSecondsLeft());
   const chip = $('timeChip');
   if (chip) {
-    chip.textContent = txt;
+    chip.textContent = scrolling
+      ? '▶ ' + scrollClock
+      : '⏱ ' + fmtEstimate(secondsForWords(curAliyahWords * (1 - readFraction())));
     chip.classList.toggle('live', scrolling);
   }
+  // fullscreen is where auto-scroll lives, so its readout is *always* the scroll clock
+  // (paused, it just stops ticking) — flipping to the 200-words estimate every time the
+  // scroll was paused made the number jump around confusingly
   const zen = $('zenTime');
   if (zen) {
-    zen.textContent = txt;
+    zen.textContent = (scrolling ? '▶ ' : '⏱ ') + scrollClock;
     zen.classList.toggle('live', scrolling);
   }
   lastTimeChipPaint = performance.now();
@@ -868,41 +896,59 @@ function renderProgress() {
     </button>`;
   }
 
+  // two clearly separate cards: facts about the parasha itself (fixed — the same for
+  // everyone, every week), and your own reading progress (what's still left to read)
   body.innerHTML = `
-    <div class="progCombo">
-      <svg viewBox="0 0 200 200" class="progComboSvg">
-        <circle class="progRingBg" cx="100" cy="100" r="${RING_R}"></circle>
-        <circle class="progRingFill" id="progRingFill" cx="100" cy="100" r="${RING_R}"></circle>
-      </svg>
-      <div class="aliyahPie" id="aliyahPie"></div>
-      <div class="aliyahPieLabels" id="aliyahPieLabels"></div>
-      <div class="progComboLabel"><div class="n" id="progRingPct">0%</div></div>
-    </div>
     <h3 class="progweektitle">${m.he} <span class="parashaSizeBadge" id="parashaSizeBadge"></span></h3>
-    <div class="progringsub" id="versesLeftN">…</div>
 
-    <div class="lengthSection" id="lengthSection">
-      <div class="lengthTitle">${t('sizeVsOthers')}</div>
-      <div class="avgGaugeTrack">
-        <div class="avgGaugeFill" id="avgGaugeFill"></div>
-        <div class="avgGaugeTicks" id="avgGaugeTicks"></div>
-        <div class="avgGaugeMid"></div>
-        <div class="avgGaugeMidLbl">${t('sizeAvg')}</div>
-        <div class="avgGaugeMark" id="avgGaugeMark"></div>
+    <section class="progCard factsCard">
+      <div class="progCardHead">${t('aboutParasha')}</div>
+      <div class="factsTop">
+        <div class="factBig"><span class="factNum" id="factVerses">…</span> <span class="factUnit">${t('versesWord')}</span></div>
+        <div class="factMasorah" id="factMasorah">${masorahHTML(e[1])}</div>
       </div>
-      <div class="avgGaugeCaption" id="avgGaugeCaption">…</div>
       <div class="lengthTotalTime" id="lengthTotalTime">⏱ …</div>
-      <button type="button" class="lengthDetailsToggle" id="lengthDetailsToggle" aria-expanded="false">${t('moreDetails')} ⌄</button>
-      <div class="lengthDetails hidden" id="lengthDetails">
-        <div class="sizeGaugeEnds">
-          <span id="sizeGaugeMin">—</span><span id="sizeGaugeMax">—</span>
+      <div class="lengthSection" id="lengthSection">
+        <div class="lengthTitle">${t('sizeVsOthers')}</div>
+        <div class="avgGaugeTrack">
+          <div class="avgGaugeFill" id="avgGaugeFill"></div>
+          <div class="avgGaugeTicks" id="avgGaugeTicks"></div>
+          <div class="avgGaugeMid"></div>
+          <div class="avgGaugeMidLbl">${t('sizeAvg')}</div>
+          <div class="avgGaugeMark" id="avgGaugeMark"></div>
         </div>
-        <div class="sizeGaugeNote" id="sizeGaugeNote"></div>
+        <div class="avgGaugeCaption" id="avgGaugeCaption">…</div>
+        <button type="button" class="lengthDetailsToggle" id="lengthDetailsToggle" aria-expanded="false">${t('moreDetails')} ⌄</button>
+        <div class="lengthDetails hidden" id="lengthDetails">
+          <div class="sizeGaugeEnds">
+            <span id="sizeGaugeMin">—</span><span id="sizeGaugeMax">—</span>
+          </div>
+          <div class="sizeGaugeNote" id="sizeGaugeNote"></div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="progringsub progTimeLeft" id="parashaTimeLeft">⏱ …</div>
-    <div class="alrows">${rows}</div>
+    <section class="progCard myProgCard">
+      <div class="progCardHead">${t('myProgress')}</div>
+      <div class="progCombo">
+        <svg viewBox="0 0 200 200" class="progComboSvg">
+          <circle class="progRingBg" cx="100" cy="100" r="${RING_R}"></circle>
+          <circle class="progRingFill" id="progRingFill" cx="100" cy="100" r="${RING_R}"></circle>
+        </svg>
+        <div class="aliyahPie" id="aliyahPie"></div>
+        <div class="aliyahPieLabels" id="aliyahPieLabels"></div>
+        <div class="progComboLabel"><div class="n" id="progRingPct">0%</div></div>
+      </div>
+      <div class="leftBox">
+        <div class="leftBoxTitle">${t('leftToRead')}</div>
+        <div class="leftStats">
+          <div class="leftStat"><div class="leftStatN" id="leftVerses">…</div><div class="leftStatL">${t('versesWord')}</div></div>
+          <div class="leftStat"><div class="leftStatN" id="leftTime">…</div><div class="leftStatL">${t('readTime')}</div></div>
+          <div class="leftStat"><div class="leftStatN" id="leftPct">…</div><div class="leftStatL">${t('ofParasha')}</div></div>
+        </div>
+      </div>
+      <div class="alrows">${rows}</div>
+    </section>
     <p class="hint progWpmNote">${t('wpmNote')}</p>`;
 
   body.querySelectorAll('.alrow').forEach(c => c.addEventListener('click', () => {
@@ -935,8 +981,10 @@ function renderProgress() {
       if (versesEl) versesEl.textContent = `${a.count} ${t('versesWord')}`;
     });
     setRingPct(body.querySelector('#progRingFill'), body.querySelector('#progRingPct'), r.overallPct);
-    const versesLeftEl = body.querySelector('#versesLeftN');
-    if (versesLeftEl) versesLeftEl.textContent = `${r.total - r.read} ${t('versesLeft')}`;
+    const set = (id, txt) => { const el = body.querySelector(id); if (el) el.textContent = txt; };
+    set('#factVerses', String(r.total));
+    set('#leftVerses', String(r.total - r.read));
+    set('#leftPct', (100 - r.overallPct) + '%');
 
     // how big each aliyah is relative to the others in this parasha (a static fact, not
     // tied to reading progress) — a 7-slice pie chart, self-labeled on the slices
@@ -1011,8 +1059,8 @@ function renderProgress() {
       const el = body.querySelector(`[data-altime="${i}"]`);
       if (el) el.textContent = '⏱ ' + fmtEstimate(secondsForWords(w));
     }
-    const totalEl = body.querySelector('#parashaTimeLeft');
-    if (totalEl) totalEl.textContent = `⏱ ${t('timeLeftParasha')} ≈ ${fmtEstimate(leftSec)}`;
+    const leftEl = body.querySelector('#leftTime');
+    if (leftEl) leftEl.textContent = fmtEstimate(leftSec);
   }).catch(() => {});
 
   if (n === 8) {
@@ -1741,7 +1789,7 @@ const ABOUT_HTML = `
 <li>לוח פרשות ועליות: hebcal</li>
 </ul>
 <p>גופנים: פרנק-רוהל וכתר (Culmus), עזרא (SIL OFL).</p>
-<p class="hint">הערכת זמני הקריאה מבוססת על הכלל שבדקה אפשר לקרוא כ־200 מילים — חפץ חיים, קונטרס תורת הבית פרק ב׳. בזמן גלילה אוטומטית מוצג הזמן שנותר לגלילה עצמה, לפי מהירות הגלילה.</p>
+<p class="hint">הערכת זמני הקריאה מבוססת על הכלל שבדקה אפשר לקרוא כ־200 מילים — חפץ חיים, קונטרס תורת הבית פרק ב׳. בזמן גלילה אוטומטית — ובמסך מלא תמיד — מוצג הזמן שנותר לגלילה עצמה, לפי מהירות הגלילה.</p>
 <p>הטקסטים נבדקו אך ייתכנו טעויות — נא לדווח. אין לסמוך על האפליקציה לקריאה בציבור.</p>`;
 
 // Unicode Hebrew cantillation (te'amim) combining marks, U+0591-U+05AA.

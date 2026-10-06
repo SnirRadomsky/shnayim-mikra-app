@@ -162,16 +162,24 @@ check('weekly progress page has an overall ring, no Gregorian date', await page.
 // toggle sheni via row click
 await page.click('.alrow[data-al="1"]');
 await page.waitForTimeout(300);
-const vl = parseInt(await page.textContent('#versesLeftN'), 10);
+const vl = parseInt(await page.textContent('#leftVerses'), 10);
 check('verses-left computed (Matot-Masei total 244, minus rishon 28 & sheni 42 = 174)', vl === 174, vl);
+check('remaining % shown next to it (174/244 left)', (await page.textContent('#leftPct')).trim() === '71%', await page.textContent('#leftPct'));
+
+// --- the parasha's own facts: verse count + Masoretic note, in their own card ---
+check('total verse count shown up front (not under "more details")',
+  (await page.textContent('.factsCard #factVerses')).trim() === '244', await page.textContent('#factVerses'));
+const masorah = await page.$$eval('.factsCard .masorahLine', els => els.map(e => e.textContent));
+check('doubled parasha shows the Masoretic note of each half', masorah.length === 2 && masorah.every(l => /סימן/.test(l)), masorah);
+check('progress figures live in a separate card from the parasha facts',
+  await page.$('.factsCard #leftVerses') === null && await page.$('.myProgCard #leftVerses') !== null);
 
 // --- reading-time estimates (200 words/min) + graphic parasha-size indicator ---
-await page.waitForFunction(() => /\d/.test(document.getElementById('parashaTimeLeft').textContent));
+await page.waitForFunction(() => /\d/.test(document.getElementById('leftTime').textContent));
 const alTimes = await page.$$eval('.alrowtime', els => els.map(e => e.textContent.trim()));
 check('every aliyah row shows a reading-time estimate', alTimes.length === 7 && alTimes.every(s => /^⏱ .*\d/.test(s)), alTimes);
-const parashaLeft = await page.textContent('#parashaTimeLeft');
-check('parasha time-left shown, and less than the whole parasha (rishon+sheni done)',
-  /נותר לפרשה/.test(parashaLeft) && /\d/.test(parashaLeft), parashaLeft);
+const parashaLeft = await page.textContent('#leftTime');
+check('parasha time-left shown in the "left to read" box', /\d/.test(parashaLeft), parashaLeft);
 check('reading-speed source credited on the progress page',
   /200/.test(await page.textContent('.progWpmNote')) && /חפץ חיים/.test(await page.textContent('.progWpmNote')));
 
@@ -403,6 +411,8 @@ check('preview carries the page background, so light/dark are not inverted', mm.
 check('whole aliyah fits the track', mm.trackH <= mm.maxH + 1, mm);
 await page.evaluate(() => document.getElementById('zenMinimap').classList.add('expanded', 'pinned'));
 await page.waitForTimeout(300);
+const mmOpacity = parseFloat(await page.$eval('#zenMinimap', el => getComputedStyle(el).opacity));
+check('expanded preview is slightly see-through, never fully hiding the text under it', mmOpacity > 0.5 && mmOpacity < 1, mmOpacity);
 await page.screenshot({ path: SHOTS + '/09-zen-minimap.png' });
 await page.mouse.click(220, 500); // tap the text itself
 await page.waitForTimeout(250);
@@ -453,7 +463,8 @@ check('toggle alone does not show it outside fullscreen', !(await page.isVisible
 await page.click('#btnZen');
 await page.waitForTimeout(300);
 check('fullscreen time readout appears once enabled', await page.isVisible('#zenTime'));
-check('fullscreen readout shows the aliyah estimate', /^⏱ .*\d/.test(await page.textContent('#zenTime')), await page.textContent('#zenTime'));
+check('fullscreen readout shows the auto-scroll clock even while paused (not the 200-wpm estimate)',
+  /^⏱ \d+:\d\d/.test(await page.textContent('#zenTime')), await page.textContent('#zenTime'));
 await page.click('#zenPlayBtn');
 await page.waitForTimeout(900);
 check('fullscreen readout goes live with auto-scroll', /^▶ \d+:\d\d/.test(await page.textContent('#zenTime')), await page.textContent('#zenTime'));
