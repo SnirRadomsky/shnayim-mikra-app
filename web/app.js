@@ -599,7 +599,60 @@ const PARASHA_SIZE_KEY = { short: 'parashaSizeShort', medium: 'parashaSizeMedium
 // numerals, and the mnemonic (סימן) the Masorah gives for it — e.g. Bereshit: קמ"ו, אמצי"ה.
 // A doubled parasha (Matot-Masei…) shows each half's own note.
 const MASORAH = {
-  /*MASORAH_DATA*/
+  Bereshit: { n: 146, nHe: 'קמ"ו', siman: 'אמצי"ה' },
+  Noach: { n: 153, nHe: 'קנ"ג', siman: 'בצלא"ל' },
+  'Lech-Lecha': { n: 126, nHe: 'קכ"ו', siman: 'נמל"ו' },
+  Vayera: { n: 147, nHe: 'קמ"ז', siman: 'אמנו"ן' },
+  'Chayei Sara': { n: 105, nHe: 'ק"ה', siman: 'יהויד"ע' },
+  Toldot: { n: 106, nHe: 'ק"ו', siman: 'על"ו' },
+  Vayetzei: { n: 148, nHe: 'קמ"ח', siman: 'חלק"י' },
+  Vayishlach: { n: 154, nHe: 'קנ"ד', siman: 'קליט"ה', note: 'המסורה מונה את בראשית לה, כב כשני פסוקים', noteEn: 'The Masorah counts Gen. 35:22 as two verses' },
+  Vayeshev: { n: 112, nHe: 'קי"ב', siman: 'יב"ק' },
+  Miketz: { n: 146, nHe: 'קמ"ו', siman: 'יחזקיה"ו' },
+  Vayigash: { n: 106, nHe: 'ק"ו', siman: 'יהללא"ל' },
+  Vayechi: { n: 85, nHe: 'פ"ה', siman: 'ימל"ה' },
+  Shemot: { n: 124, nHe: 'קכ"ד', siman: 'ויק"ח' },
+  Vaera: { n: 121, nHe: 'קכ"א', siman: 'גיבעו"ל' },
+  Bo: { n: 105, nHe: 'ק"ה', siman: 'ימנ"ה', note: 'מניין המסורה שונה במעט מחלוקת הפסוקים המקובלת', noteEn: 'The Masoretic count differs slightly from the standard verse division' },
+  Beshalach: { n: 116, nHe: 'קט"ז', siman: 'יד אמונ"ה' },
+  Yitro: { n: 72, nHe: 'ע"ב', siman: 'יונד"ב', note: 'המסורה מונה את עשרת הדיברות בטעם העליון', noteEn: 'The Masorah counts the Ten Commandments by the upper cantillation' },
+  Mishpatim: { n: 118, nHe: 'קי"ח', siman: 'עזיא"ל' },
+  Terumah: { n: 96, nHe: 'צ"ו', siman: 'יעי"ו' },
+  Tetzaveh: { n: 101, nHe: 'ק"א', siman: 'מיכא"ל' },
+  'Ki Tisa': { n: 139, nHe: 'קל"ט', siman: 'חננא"ל' },
+  Vayakhel: { n: 122, nHe: 'קכ"ב', siman: 'סנוא"ה' },
+  Pekudei: { n: 92, nHe: 'צ"ב', siman: 'עזי"ה' },
+  Vayikra: { n: 111, nHe: 'קי"א', siman: 'דעוא"ל' },
+  Tzav: { n: 96, nHe: 'צ"ו', siman: 'צ"ו', note: 'מניין המסורה שונה במעט מחלוקת הפסוקים המקובלת', noteEn: 'The Masoretic count differs slightly from the standard verse division' },
+  Shmini: { n: 91, nHe: 'צ"א', siman: 'עבדי"ה' },
+  Tazria: { n: 67, nHe: 'ס"ז', siman: 'בני"ה' },
+  Metzora: { n: 90, nHe: 'צ\'', siman: 'עיד"ו' },
+  'Achrei Mot': { n: 80, nHe: 'פ\'', siman: 'כי כ"ל' },
+  Kedoshim: { n: 64, nHe: 'ס"ד', siman: 'ונג"ה' },
+  Emor: { n: 124, nHe: 'קכ"ד', siman: 'אלעוז"י' },
+  Behar: { n: 57, nHe: 'נ"ז', siman: 'חטי"ל' },
+  Bechukotai: { n: 78, nHe: 'ע"ח', siman: 'עז"א' },
+  Bamidbar: { n: 159, nHe: 'קנ"ט', siman: 'חלקיה"ו' },
+  Nasso: { n: 176, nHe: 'קע"ו', siman: 'עמו"ס' },
+  'Beha\'alotcha': { n: 136, nHe: 'קל"ו', siman: 'מהללא"ל' },
+  'Sh\'lach': { n: 119, nHe: 'קי"ט', siman: 'פל"ט' },
+  Korach: { n: 95, nHe: 'צ"ה', siman: 'דניא"ל' },
+  Chukat: { n: 87, nHe: 'פ"ז', siman: 'למידב"א' },
+  Balak: { n: 104, nHe: 'ק"ד', siman: 'מנו"ח' },
+  Pinchas: { n: 168, nHe: 'קס"ח', siman: 'לחל"ק' },
+  Matot: { n: 112, nHe: 'קי"ב', siman: 'בק"י' },
+  Masei: { n: 132, nHe: 'קל"ב', siman: 'מחלה חול"ה' },
+  Devarim: { n: 105, nHe: 'ק"ה', siman: 'מלכי"ה' },
+  Vaetchanan: { n: 118, nHe: 'קי"ח', siman: 'עזיא"ל', note: 'המסורה מונה את עשרת הדיברות בטעם העליון', noteEn: 'The Masorah counts the Ten Commandments by the upper cantillation' },
+  Eikev: { n: 111, nHe: 'קי"א', siman: 'אי"ק' },
+  'Re\'eh': { n: 126, nHe: 'קכ"ו', siman: 'פלאי"ה' },
+  Shoftim: { n: 97, nHe: 'צ"ז', siman: 'סלו"א' },
+  'Ki Teitzei': { n: 110, nHe: 'ק"י', siman: 'על"י' },
+  'Ki Tavo': { n: 122, nHe: 'קכ"ב', siman: 'לעבדי"ו' },
+  Nitzavim: { n: 40, nHe: 'מ\'', siman: 'לבב"ו' },
+  Vayeilech: { n: 70, nHe: 'ע\'', siman: 'אדני"ה', note: 'המסורה מונה את נצבים ווילך יחד', noteEn: 'The Masorah counts Nitzavim and Vayeilech together' },
+  'Ha\'azinu': { n: 52, nHe: 'נ"ב', siman: 'כל"ב' },
+  'Vezot Haberakhah': { n: 41, nHe: 'מ"א', siman: 'גאוא"ל' },
 };
 function masorahParts(key) {
   if (MASORAH[key]) return [{ key, ...MASORAH[key] }];
@@ -611,7 +664,10 @@ function masorahHTML(key) {
   const many = parts.length > 1;
   return parts.map(p => `<div class="masorahLine">${many ? `<span class="masorahName">${esc(PARSHIYOT[p.key] ? PARSHIYOT[p.key].he : p.key)}:</span> ` : ''}`
     + `<span class="masorahNum">${esc(p.nHe)}</span>`
-    + `<span class="masorahSep"> · </span><span class="masorahSiman">${t('masorahSiman')} <b>${esc(p.siman)}</b></span></div>`).join('');
+    + `<span class="masorahSep"> · </span><span class="masorahSiman">${t('masorahSiman')} <b>${esc(p.siman)}</b></span></div>`
+    // where the Masorah's count isn't today's verse division (e.g. Yitro: the Ten
+    // Commandments by the upper cantillation), say why the two numbers differ
+    + (p.note ? `<div class="masorahNote">${esc(S.lang === 'he' ? p.note : p.noteEn)}</div>` : '')).join('');
 }
 
 // verse-level progress across the whole parasha (all 7 aliyot) — a bookmark gives its

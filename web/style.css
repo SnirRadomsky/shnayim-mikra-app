@@ -367,6 +367,7 @@ html:not([data-theme="dark"]) .progTimeLeft { color: var(--blue); }
 .masorahName { color: #888; }
 .masorahNum { font-weight: 700; }
 .masorahSep { color: #888; }
+.masorahNote { font-size: .74rem; color: #888; margin-top: -1px; }
 .factsCard .lengthTotalTime { margin: 10px 0 14px; }
 .factsCard .lengthSection { border-top: 1px solid var(--line); padding-top: 14px; }
 
