@@ -628,3 +628,19 @@ html[data-theme="dark"] .playbtn { border: none; color: #101116; background: lin
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mikra) 35%, transparent), transparent);
 }
 .colorpick, .cpRecentSwatch { transition: none; }
+
+/* toggles: roomy track, soft thumb with a check mark when on */
+.tgl {
+  width: 56px; height: 32px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 22%, var(--paper));
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.22); transition: background .2s ease;
+}
+.tgl::after {
+  content: ''; top: 3px; right: 3px; width: 26px; height: 26px; color: var(--navy);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; line-height: 26px; text-align: center;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.28), 0 3px 6px rgba(0,0,0,.16);
+  transition: transform .22s cubic-bezier(.3,1.4,.5,1), width .12s ease;
+}
+.tgl:checked::after { content: '✓'; transform: translateX(-24px); }
+.tgl:active::after { width: 32px; }
+.tgl:checked:active::after { transform: translateX(-30px); }
+html[data-theme="dark"] .tgl::after { color: #101116; }
