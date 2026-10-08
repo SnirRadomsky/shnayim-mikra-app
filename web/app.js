@@ -150,6 +150,11 @@ const WORDS_PER_MINUTE = 200;
 // ---------------------------------------------------------------- state
 // Speed 50 (the middle of the 1–100 scale) is ~38 px/s; every ±22 steps doubles / halves it.
 const SPEED_MID_PX = 38.4, SPEED_OCTAVE = 22;
+// The font-size number shown to the user is a level, not pixels: level 50 (the default) is
+// 34 px, and each ±2 step is ±1.36 px. Levels 26–176 span roughly 18–120 px.
+const FONT_PX_PER_LEVEL = 34 / 50, FONT_MIN = 26, FONT_MAX = 176;
+function fontPx() { return +(S.fontSize * FONT_PX_PER_LEVEL).toFixed(2); }
+function stepFont(d) { S.fontSize = Math.max(FONT_MIN, Math.min(FONT_MAX, S.fontSize + d)); saveSettings(); applyAll(); }
 const savedSettings = loadJSON('sm_settings', {});
 let S = Object.assign({}, DEFAULTS, savedSettings);
 // the speed scale was re-centred (old 18 == new 50): carry a saved speed over to the new scale
@@ -159,6 +164,16 @@ if (!S.speedScale) {
     S.speed = Math.max(1, Math.min(100, Math.round(50 + SPEED_OCTAVE * Math.log2(oldPx / SPEED_MID_PX))));
   }
   S.speedScale = 2;
+}
+// font size used to be stored in raw px (default 50 px): carry a saved size over to the level
+// scale, so whatever the reader had looks the same (e.g. their old 34 px now reads as 50).
+// The old default (50 px) was judged too big, so it just becomes the new default.
+if (!S.fontScale) {
+  if (typeof savedSettings.fontSize === 'number' && savedSettings.fontSize !== 50) {
+    const lvl = 2 * Math.round(savedSettings.fontSize / FONT_PX_PER_LEVEL / 2);
+    S.fontSize = Math.max(FONT_MIN, Math.min(FONT_MAX, lvl));
+  }
+  S.fontScale = 2;
 }
 // colors used to be one flat set shared by every theme, which caused dark-mode text to
 // become invisible if a dark-ish color was picked while in light theme (it "stuck" across
@@ -1268,7 +1283,7 @@ function applyAll() {
   document.body.setAttribute('data-font', S.font);
   document.documentElement.setAttribute('lang', S.lang);
   document.documentElement.setAttribute('dir', 'rtl'); // app is RTL even in English UI
-  $('content').style.fontSize = S.fontSize + 'px';
+  $('content').style.fontSize = fontPx() + 'px';
   document.body.setAttribute('data-targumbg', S.targumBg);
   applyColorVars();
   $('scrollbar').classList.toggle('hidden', S.scrollbar !== 'yes');
@@ -1457,8 +1472,8 @@ function bindColorPicker() {
 function bindSettings() {
   $('setOnkelos').addEventListener('change', ev => { S.onkelos = ev.target.checked; saveSettings(); renderReader(true); });
   $('setRashi').addEventListener('change', ev => { S.rashi = ev.target.checked; saveSettings(); renderReader(true); });
-  $('fontUp').addEventListener('click', () => { S.fontSize = Math.min(120, S.fontSize + 2); saveSettings(); applyAll(); });
-  $('fontDown').addEventListener('click', () => { S.fontSize = Math.max(18, S.fontSize - 2); saveSettings(); applyAll(); });
+  $('fontUp').addEventListener('click', () => stepFont(2));
+  $('fontDown').addEventListener('click', () => stepFont(-2));
   $('speedUp2').addEventListener('click', () => setSpeed(S.speed + 1));
   $('speedDown2').addEventListener('click', () => setSpeed(S.speed - 1));
   bindSeg('segMode', 'mode', () => renderReader());
@@ -1698,8 +1713,8 @@ function bindUI() {
   $('miProgress').addEventListener('click', () => { closeMenu(); renderProgress(); openPage('progressPage'); });
   $('miProgressGeneral').addEventListener('click', () => { closeMenu(); renderProgressGeneral(); openPage('progressGeneralPage'); });
   $('miBookmarkGo').addEventListener('click', () => { closeMenu(); goToBookmark(); });
-  $('miFontUp').addEventListener('click', () => { S.fontSize = Math.min(120, S.fontSize + 2); saveSettings(); applyAll(); });
-  $('miFontDown').addEventListener('click', () => { S.fontSize = Math.max(18, S.fontSize - 2); saveSettings(); applyAll(); });
+  $('miFontUp').addEventListener('click', () => stepFont(2));
+  $('miFontDown').addEventListener('click', () => stepFont(-2));
   $('miSettings').addEventListener('click', () => { closeMenu(); openPage('settingsPage'); });
   $('miAbout').addEventListener('click', () => {
     closeMenu();

@@ -343,7 +343,7 @@ await page.click('#fontUp'); await page.click('#fontUp');
 check('font stepper', +(await page.textContent('#fontVal')) === f0 + 4);
 await page.click('.pageback');
 const fs1 = await page.$eval('#content', el => el.style.fontSize);
-check('font size applied to content', fs1 === (f0 + 4) + 'px', fs1);
+check('font size applied to content', Math.abs(parseFloat(fs1) - (f0 + 4) * 34 / 50) < 0.01, fs1);
 // bookmark — a bookmark is placed by long-pressing a verse; the toolbar 🔖 button only
 // *jumps* to the saved one
 await page.$eval('#content', el => el.scrollTop = 1500);
@@ -363,7 +363,8 @@ await page.waitForFunction(() => document.getElementById('parshaName').textConte
 await page.reload();
 await page.waitForSelector('.verse');
 check('position persists after reload (Pinchas)', (await page.textContent('#parshaName')).includes('פִּינְחָס'));
-check('font size persists', (await page.$eval('#content', el => el.style.fontSize)) === (f0 + 4) + 'px');
+check('font size persists', (await page.textContent('#fontVal')) === String(f0 + 4)
+  && Math.abs(parseFloat(await page.$eval('#content', el => el.style.fontSize)) - (f0 + 4) * 34 / 50) < 0.01);
 check('font family persists', (await page.$eval('#content', el => getComputedStyle(el).fontFamily)).includes('EzraSIL'));
 // bookmark jump
 await page.click('#btnMenu'); await page.click('#miBookmarkGo');
