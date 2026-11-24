@@ -44,7 +44,13 @@
       <button data-vf="mikra">מקרא</button>
       <button data-vf="targum">תרגום</button>
     </div>
-    <button id="btnBookmark" class="iconbtn" title="סימניה">🔖</button>
+    <div class="reader-actions">
+      <div class="reader-font-controls" dir="ltr" role="group" aria-label="גודל הכתב" data-i18n-aria="fontSize">
+        <button id="readerFontDown" type="button" aria-label="הקטן כתב" data-i18n-aria="menuFontDown"><span data-i18n="fontDownShort">א−</span></button>
+        <button id="readerFontUp" type="button" aria-label="הגדל כתב" data-i18n-aria="menuFontUp"><span data-i18n="fontUpShort">א+</span></button>
+      </div>
+      <button id="btnBookmark" class="iconbtn" title="סימניה">🔖</button>
+    </div>
   </div>
   <div id="zenProgress" class="zenprogress hidden"><div id="zenProgressFill" class="zenprogressfill"></div></div>
 

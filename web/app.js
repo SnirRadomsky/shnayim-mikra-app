@@ -25,7 +25,7 @@ const DAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'
 const STR = {
   he: {
     settings: 'הגדרות', targum: 'תרגום', onkelos: 'אונקולוס', rashi: 'רש"י',
-    fontSize: 'גודל הכתב', scrollSpeed: 'מהירות גלילה', readBy: 'קריאה לפי',
+    fontSize: 'גודל הכתב', fontDownShort: 'א−', fontUpShort: 'א+', scrollSpeed: 'מהירות גלילה', readBy: 'קריאה לפי',
     byVerse: 'פסוק פסוק', byAliyah: 'עליות', teamim: 'טעמים', with: 'עם', without: 'בלי',
     haftara: 'הפטרה', minhag: 'מנהג:', ashkenaz: 'אשכנז', sephard: 'ספרד',
     showVerse: 'הצג פסוק', once: 'פעם אחת', twice: 'פעמיים', language: 'שפה',
@@ -79,7 +79,7 @@ const STR = {
   },
   en: {
     settings: 'Settings', targum: 'Targum', onkelos: 'Onkelos', rashi: 'Rashi',
-    fontSize: 'Font size', scrollSpeed: 'Scroll speed', readBy: 'Read by',
+    fontSize: 'Font size', fontDownShort: 'A−', fontUpShort: 'A+', scrollSpeed: 'Scroll speed', readBy: 'Read by',
     byVerse: 'Verse by verse', byAliyah: 'Aliyot', teamim: 'Cantillation', with: 'With', without: 'Without',
     haftara: 'Haftarah', minhag: 'Custom:', ashkenaz: 'Ashkenaz', sephard: 'Sephard',
     showVerse: 'Show verse', once: 'Once', twice: 'Twice', language: 'Language',
@@ -154,7 +154,30 @@ const SPEED_MID_PX = 38.4, SPEED_OCTAVE = 22;
 // 34 px, and each ±2 step is ±1.36 px. Levels 26–176 span roughly 18–120 px.
 const FONT_PX_PER_LEVEL = 34 / 50, FONT_MIN = 26, FONT_MAX = 176;
 function fontPx() { return +(S.fontSize * FONT_PX_PER_LEVEL).toFixed(2); }
-function stepFont(d) { S.fontSize = Math.max(FONT_MIN, Math.min(FONT_MAX, S.fontSize + d)); saveSettings(); applyAll(); }
+function stepFont(d) {
+  const level = Math.max(FONT_MIN, Math.min(FONT_MAX, S.fontSize + d));
+  if (level === S.fontSize) return;
+
+  // Reflow changes the height of everything above the reader's current passage.
+  const content = $('content');
+  const top = content.getBoundingClientRect().top;
+  const anchor = content.scrollTop > 0 && Array.from(content.children)
+    .find(el => el.getBoundingClientRect().bottom > top);
+  const before = anchor && anchor.getBoundingClientRect();
+
+  S.fontSize = level;
+  saveSettings();
+  applyAll();
+
+  if (before) {
+    const after = anchor.getBoundingClientRect();
+    const offset = before.top - top;
+    const targetOffset = offset < 0 ? offset * after.height / before.height : offset;
+    content.scrollTop += after.top - content.getBoundingClientRect().top - targetOffset;
+  }
+  updateScrollProgress();
+  paintTimeChip();
+}
 const savedSettings = loadJSON('sm_settings', {});
 let S = Object.assign({}, DEFAULTS, savedSettings);
 // the speed scale was re-centred (old 18 == new 50): carry a saved speed over to the new scale
@@ -1291,7 +1314,10 @@ function applyAll() {
   applyColorVars();
   $('scrollbar').classList.toggle('hidden', S.scrollbar !== 'yes');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   $('fontVal').textContent = S.fontSize;
+  $('readerFontDown').disabled = S.fontSize <= FONT_MIN;
+  $('readerFontUp').disabled = S.fontSize >= FONT_MAX;
   $('speedVal').textContent = S.speed;
   $('speedVal2').textContent = S.speed;
   seg($('segMode'), S.mode); seg($('segTeamim'), S.teamim); seg($('segHaftara'), S.haftara);
@@ -1748,6 +1774,8 @@ function bindUI() {
   $('zenPlayBtn').addEventListener('click', () => { scrolling ? stopAutoScroll() : startAutoScroll(); });
   $('speedUp').addEventListener('click', () => setSpeed(S.speed + 1));
   $('speedDown').addEventListener('click', () => setSpeed(S.speed - 1));
+  $('readerFontDown').addEventListener('click', () => stepFont(-2));
+  $('readerFontUp').addEventListener('click', () => stepFont(2));
   $('btnBookmark').addEventListener('click', goToBookmark);
   $('btnZen').addEventListener('click', toggleZen);
   $('zenExit').addEventListener('click', toggleZen);
