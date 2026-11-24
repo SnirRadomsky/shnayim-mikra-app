@@ -44,6 +44,8 @@ const STR = {
     menuToday: 'לפרשת השבוע', menuProgress: 'התקדמות השבוע', menuProgressGeneral: 'התקדמות כללית', menuBookmark: 'עבור לסימניה',
     menuFontUp: 'הגדל כתב', menuFontDown: 'הקטן כתב', menuSettings: 'הגדרות', menuAbout: 'אודות',
     autoScroll: 'גלילה אוטומטית:', speed: 'מהירות:',
+    zenAutoScroll: 'הפעל/עצור גלילה אוטומטית',
+    zenSpeedHint: 'גררו ימינה כדי להאיץ או שמאלה כדי להאט, או השתמשו במקשי החצים.',
     all: 'הכל', mikraOnly: 'מקרא', targumOnly: 'תרגום',
     mikraFirst: 'מקרא — פעם ראשונה', mikraSecond: 'מקרא — פעם שנייה', mikraOnce: 'מקרא',
     onkelosSec: 'תרגום אונקלוס', rashiSec: 'רש"י',
@@ -98,6 +100,8 @@ const STR = {
     menuToday: 'This week\'s parashah', menuProgress: 'This Week\'s Progress', menuProgressGeneral: 'Overall Progress', menuBookmark: 'Go to bookmark',
     menuFontUp: 'Increase font', menuFontDown: 'Decrease font', menuSettings: 'Settings', menuAbout: 'About',
     autoScroll: 'Auto-scroll:', speed: 'Speed:',
+    zenAutoScroll: 'Start or pause auto-scroll',
+    zenSpeedHint: 'Drag right to speed up or left to slow down, or use the arrow keys.',
     all: 'All', mikraOnly: 'Mikra', targumOnly: 'Targum',
     mikraFirst: 'Mikra — first reading', mikraSecond: 'Mikra — second reading', mikraOnce: 'Mikra',
     onkelosSec: 'Targum Onkelos', rashiSec: 'Rashi',
@@ -880,6 +884,10 @@ function setPlayButtonsState(playing) {
     b.textContent = playing ? '❚❚' : '▶';
     b.classList.toggle('playing', playing);
   });
+  const zenPlay = $('zenPlayBtn');
+  zenPlay.setAttribute('aria-pressed', String(playing));
+  if (playing) zenPlay.setAttribute('aria-describedby', 'zenSpeedHint');
+  else zenPlay.removeAttribute('aria-describedby');
 }
 function startAutoScroll() {
   scrolling = true;
@@ -925,12 +933,20 @@ function stopAutoScroll() {
   readerTouchActive = false;
   cancelAnimationFrame(scrollRAF);
   setPlayButtonsState(false);
+  setZenSpeedVisible(false);
   paintTimeChip();  // back to the words-per-minute estimate
 }
-function setSpeed(v) {
-  S.speed = Math.max(1, Math.min(100, v));
+function syncSpeedControls() {
   $('speedVal').textContent = S.speed;
   $('speedVal2').textContent = S.speed;
+  $('zenSpeedVal').textContent = S.speed;
+  $('zenSpeedRange').value = S.speed;
+}
+function setSpeed(v) {
+  const speed = Math.max(1, Math.min(100, v));
+  if (S.speed === speed) return;
+  S.speed = speed;
+  syncSpeedControls();
   saveSettings();
   paintTimeChip();  // a different speed means a different live countdown
 }
@@ -1318,8 +1334,7 @@ function applyAll() {
   $('fontVal').textContent = S.fontSize;
   $('readerFontDown').disabled = S.fontSize <= FONT_MIN;
   $('readerFontUp').disabled = S.fontSize >= FONT_MAX;
-  $('speedVal').textContent = S.speed;
-  $('speedVal2').textContent = S.speed;
+  syncSpeedControls();
   seg($('segMode'), S.mode); seg($('segTeamim'), S.teamim); seg($('segHaftara'), S.haftara);
   seg($('segMinhag'), S.minhag); seg($('segTwice'), S.twice); seg($('segLang'), S.lang);
   seg($('segTheme'), S.theme); seg($('segLoc'), S.loc); seg($('segScrollbar'), S.scrollbar);
@@ -1563,6 +1578,7 @@ function closeMenu() { $('sideMenu').classList.add('hidden'); $('menuOverlay').c
 function toggleZen() {
   if (document.body.classList.contains('zen')) {
     document.body.classList.remove('zen');
+    setZenSpeedVisible(false);
     $('zenExit').classList.add('hidden');
     $('zenPlayBtn').classList.add('hidden');
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -1575,6 +1591,82 @@ function toggleZen() {
   updateZenProgressVisibility();
   updateZenTimeVisibility();
   updateZenMinimapVisibility();
+}
+
+let zenSpeedHideTimer;
+function setZenSpeedVisible(visible) {
+  clearTimeout(zenSpeedHideTimer);
+  const controls = $('zenSpeed');
+  controls.classList.toggle('show', visible);
+  controls.inert = !visible;
+}
+function fadeZenSpeedAfterAdjustment() {
+  clearTimeout(zenSpeedHideTimer);
+  zenSpeedHideTimer = setTimeout(() => setZenSpeedVisible(false), 1400);
+}
+function bindZenSpeedControls() {
+  const play = $('zenPlayBtn');
+  const range = $('zenSpeedRange');
+  const enabled = () => scrolling && document.body.classList.contains('zen');
+  const dragThreshold = 12;
+  const pixelsPerStep = 7;
+  let gesture;
+  let suppressPointerClick = false;
+
+  play.addEventListener('pointerdown', ev => {
+    if (!ev.isPrimary || ev.button !== 0) return;
+    suppressPointerClick = false;
+    if (!enabled()) return;
+    gesture = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, speed: S.speed, startedAt: ev.timeStamp, axis: null };
+    play.setPointerCapture(ev.pointerId);
+  });
+  play.addEventListener('pointermove', ev => {
+    if (ev.pointerId !== gesture?.id || !enabled()) return;
+    const dx = ev.clientX - gesture.x;
+    if (!gesture.axis) {
+      const dy = ev.clientY - gesture.y;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < dragThreshold) return;
+      gesture.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (gesture.axis === 'x') setZenSpeedVisible(true);
+    }
+    if (gesture.axis === 'x') setSpeed(gesture.speed + Math.sign(dx) * Math.round(Math.abs(dx) / pixelsPerStep));
+  });
+  function finishGesture(ev) {
+    if (ev.pointerId !== gesture?.id) return;
+    const { axis, startedAt } = gesture;
+    gesture = null;
+    if (ev.type !== 'pointerup' || !enabled()) {
+      suppressPointerClick = true;
+      setZenSpeedVisible(false);
+      return;
+    }
+    const held = !axis && ev.timeStamp - startedAt >= 420;
+    suppressPointerClick = Boolean(axis || held);
+    if (axis === 'x') fadeZenSpeedAfterAdjustment();
+    else if (held) setZenSpeedVisible(true);
+  }
+  play.addEventListener('pointerup', finishGesture);
+  play.addEventListener('pointercancel', finishGesture);
+  play.addEventListener('lostpointercapture', finishGesture);
+  play.addEventListener('click', ev => {
+    // A captured drag can still produce a click on the button. Keyboard clicks have no click count.
+    if (ev.detail && suppressPointerClick) return;
+    scrolling ? stopAutoScroll() : startAutoScroll();
+  });
+  play.addEventListener('keydown', ev => {
+    if (!enabled() || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
+    ev.preventDefault();
+    setSpeed(S.speed + (ev.key === 'ArrowRight' ? 1 : -1));
+    setZenSpeedVisible(true);
+    fadeZenSpeedAfterAdjustment();
+  });
+  range.addEventListener('focus', () => clearTimeout(zenSpeedHideTimer));
+  range.addEventListener('input', () => setSpeed(Number(range.value)));
+  range.addEventListener('keydown', ev => {
+    if (ev.key !== 'Escape') return;
+    play.focus();
+    setZenSpeedVisible(false);
+  });
 }
 function updateZenProgressVisibility() {
   $('zenProgress').classList.toggle('hidden', !(document.body.classList.contains('zen') && S.zenProgress));
@@ -1733,6 +1825,7 @@ function minimapScrubTo(clientY) {
 
 function bindUI() {
   bindColorPicker();
+  bindZenSpeedControls();
   $('btnMenu').addEventListener('click', () => {
     $('sideMenu').classList.remove('hidden');
     $('menuOverlay').classList.remove('hidden');
@@ -1771,7 +1864,6 @@ function bindUI() {
     gotoAliyah(next);
   });
   $('btnPlay').addEventListener('click', () => { scrolling ? stopAutoScroll() : startAutoScroll(); });
-  $('zenPlayBtn').addEventListener('click', () => { scrolling ? stopAutoScroll() : startAutoScroll(); });
   $('speedUp').addEventListener('click', () => setSpeed(S.speed + 1));
   $('speedDown').addEventListener('click', () => setSpeed(S.speed - 1));
   $('readerFontDown').addEventListener('click', () => stepFont(-2));
@@ -1810,7 +1902,10 @@ function bindUI() {
   // 'click', not 'pointerdown' — pointerdown also fires at the start of a scroll/drag gesture,
   // which used to collapse the preview the instant you tried to scroll past it. 'click' is
   // only synthesized by the browser for an actual tap (no scroll happened in between).
-  $('content').addEventListener('click', collapseMinimap);
+  $('content').addEventListener('click', () => {
+    collapseMinimap();
+    setZenSpeedVisible(false);
+  });
   window.addEventListener('resize', () => syncMinimap(true));
   $('viewFilter').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     S.viewFilter = b.dataset.vf;
