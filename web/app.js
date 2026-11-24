@@ -195,6 +195,7 @@ if (!bookmarks) {
   saveJSON('sm_bookmarks', bookmarks);
 }
 let scrolling = false, scrollRAF = 0, lastTs = 0, scrollRemainder = 0;
+let readerTouchActive = false;
 let longPressTimer = null;
 let teamimNusach = S.minhag === 'ashk' ? 'ashk' : 'seph';
 let wakeLock = null;
@@ -864,7 +865,7 @@ function startAutoScroll() {
   lastTs = 0; scrollRemainder = 0;
   const step = ts => {
     if (!scrolling) return;
-    if (lastTs) {
+    if (!readerTouchActive && lastTs) {
       const dt = (ts - lastTs) / 1000;
       const c = $('content');
       scrollRemainder += pxPerSec() * dt;
@@ -882,7 +883,8 @@ function startAutoScroll() {
       // at very low speeds, so the clock never looks frozen)
       paintTimeChipThrottled(250);
     }
-    lastTs = ts;
+    // Exclude time spent touching the reader so there is no catch-up on release.
+    lastTs = readerTouchActive ? 0 : ts;
     scrollRAF = requestAnimationFrame(step);
   };
   scrollRAF = requestAnimationFrame(step);
@@ -897,6 +899,7 @@ function stopAutoScroll() {
     savePos();
   }
   scrolling = false;
+  readerTouchActive = false;
   cancelAnimationFrame(scrollRAF);
   setPlayButtonsState(false);
   paintTimeChip();  // back to the words-per-minute estimate
@@ -1801,13 +1804,15 @@ function bindUI() {
       }
     }, 300);
   });
-  // dragging/scrolling the page by hand must NOT cancel auto-scroll; only
-  // system-level interruptions (app backgrounded, notification shade opened) do.
+  // System-level interruptions still stop auto-scroll.
   document.addEventListener('visibilitychange', () => { if (document.hidden && scrolling) stopAutoScroll(); });
   // double-tap toggles fullscreen (zen) mode, both entering and exiting
   $('content').addEventListener('dblclick', ev => { ev.preventDefault(); toggleZen(); });
   // long-press a verse to mark/unmark a bookmark on it
-  $('content').addEventListener('touchstart', ev => {
+  const reader = $('content');
+  reader.addEventListener('touchstart', ev => {
+    readerTouchActive = true;
+    lastTs = 0;
     const v = ev.target.closest('.verse[data-cv]');
     if (!v) return;
     clearTimeout(longPressTimer);
@@ -1818,9 +1823,13 @@ function bindUI() {
       if (navigator.vibrate) navigator.vibrate(25);
     }, 550);
   }, { passive: true });
-  $('content').addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
-  $('content').addEventListener('touchend', () => clearTimeout(longPressTimer));
-  $('content').addEventListener('touchcancel', () => clearTimeout(longPressTimer));
+  reader.addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
+  const finishReaderTouch = ev => {
+    clearTimeout(longPressTimer);
+    readerTouchActive = Array.from(ev.touches).some(touch => reader.contains(touch.target));
+  };
+  reader.addEventListener('touchend', finishReaderTouch, { passive: true });
+  reader.addEventListener('touchcancel', finishReaderTouch, { passive: true });
   $('miTeamim').addEventListener('click', () => {
     closeMenu();
     renderTeamimPage(teamimNusach);

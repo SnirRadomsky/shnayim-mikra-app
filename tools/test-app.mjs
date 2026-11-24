@@ -235,6 +235,34 @@ const st1 = await page.$eval('#content', el => el.scrollTop);
 check('auto-scroll moves content', st1 > st0 + 20, { st0, st1 });
 const playing = await page.$eval('#btnPlay', el => el.classList.contains('playing'));
 check('play button in playing state', playing);
+
+const touchSession = await page.context().newCDPSession(page);
+await touchSession.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+const readerBounds = await page.locator('#content').boundingBox();
+const touchX = Math.round(readerBounds.x + readerBounds.width / 2);
+const touchY = Math.round(readerBounds.y + readerBounds.height * 0.7);
+const readerScrollTop = () => page.$eval('#content', el => el.scrollTop);
+await touchSession.send('Input.dispatchTouchEvent', {
+  type: 'touchStart', touchPoints: [{ x: touchX, y: touchY }],
+});
+await touchSession.send('Input.dispatchTouchEvent', {
+  type: 'touchMove', touchPoints: [{ x: touchX, y: touchY - 35 }],
+});
+await touchSession.send('Input.dispatchTouchEvent', {
+  type: 'touchMove', touchPoints: [{ x: touchX, y: touchY - 140 }],
+});
+await page.waitForFunction(start => document.getElementById('content').scrollTop > start + 40, st1);
+const dragTop = await readerScrollTop();
+await page.waitForTimeout(300);
+const heldTop = await readerScrollTop();
+check('finger scrolls the reader and pauses auto-scroll while held', Math.abs(heldTop - dragTop) < 2, { dragTop, heldTop });
+check('auto-scroll remains enabled while held', await page.locator('#btnPlay.playing').count() === 1);
+await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+await page.waitForFunction(top => document.getElementById('content').scrollTop > top + 15, heldTop);
+check('auto-scroll resumes after releasing the finger', await readerScrollTop() > heldTop + 15);
+await touchSession.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+await touchSession.detach();
+
 await page.click('#btnPlay');
 await page.waitForTimeout(300);
 const st2 = await page.$eval('#content', el => el.scrollTop);
