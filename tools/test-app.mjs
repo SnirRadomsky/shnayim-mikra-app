@@ -365,6 +365,16 @@ await page.click('#viewFilter [data-vf=all]');
 await page.waitForSelector('.verse .targum');
 
 console.log('== 8. font size + persistence across reload ==');
+const originalViewport = page.viewportSize();
+await page.setViewportSize({ ...originalViewport, width: 360 });
+check('reader toolbar fits in one row on a narrow phone', await page.$eval('#readerBar', bar => {
+  const bounds = bar.getBoundingClientRect();
+  return bar.scrollWidth <= bar.clientWidth && Array.from(bar.children).every(control => {
+    const rect = control.getBoundingClientRect();
+    return Math.abs((rect.top + rect.bottom) / 2 - (bounds.top + bounds.bottom) / 2) < 1;
+  });
+}));
+await page.setViewportSize(originalViewport);
 await page.click('#btnMenu'); await page.click('#miSettings');
 const f0 = +(await page.textContent('#fontVal'));
 await page.click('#fontUp'); await page.click('#fontUp');
