@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # needed to create Releases and upload assets
+  contents: read
 
 jobs:
   build:
@@ -46,7 +46,7 @@ jobs:
           fi
           TAG="v${NAME}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME-preview" >> "$GITHUB_OUTPUT"
           echo "Resolved release version: $TAG"
 
       - name: Set up JDK 17
@@ -99,20 +99,10 @@ jobs:
           echo "DATE=${DATE}"                                          >> "$GITHUB_ENV"
           echo "SHA=${SHA}"                                            >> "$GITHUB_ENV"
 
-      - name: Create / update GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload signed preview APK
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ env.TAG }}
-          name: "שניים מקרא ואחד תרגום v${{ env.VERSION }} (${{ env.DATE }})"
-          body: |
-            ## Install / update on Android
-
-            1. Download **`${{ env.APK_NAME }}`** below (tap the link on your phone, or transfer the file).
-            2. On the phone: **Settings → Security → Install unknown apps** – enable for your browser or Files app.
-            3. Tap the downloaded `.apk` and follow the installer.
-
-            **Updating:** if you already have this app installed, Android should offer **Update** instead of asking you to uninstall first. Your reading progress and settings are kept.
-
-            Fully offline, ad-free. Built from commit [`${{ env.SHA }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}).
-          files: ${{ env.APK_NAME }}
-          make_latest: true
+          name: signed-preview-apk
+          path: shnayim-mikra-*.apk
+          if-no-files-found: error
+          retention-days: 7
