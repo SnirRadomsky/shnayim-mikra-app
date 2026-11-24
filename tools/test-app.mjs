@@ -538,8 +538,8 @@ const touchPause = (type, dx = 0) => fullscreenTouch.send('Input.dispatchTouchEv
 check('speed controls are hidden during ordinary fullscreen reading', !(await zenSpeed.isVisible()));
 await touchPause('touchStart');
 await touchPause('touchMove', 56);
-check('dragging right raises the shared speed and shows its value', await zenSpeed.isVisible()
-  && Number(await page.textContent('#zenSpeedVal')) === speedBeforeDrag + 8
+await zenSpeed.waitFor({ state: 'visible' });
+check('dragging right raises the shared speed and shows its value', Number(await page.textContent('#zenSpeedVal')) === speedBeforeDrag + 8
   && Number(await page.textContent('#speedVal')) === speedBeforeDrag + 8);
 await page.waitForFunction(top => document.getElementById('content').scrollTop > top + 5, await readerScrollTop());
 await touchPause('touchEnd');
