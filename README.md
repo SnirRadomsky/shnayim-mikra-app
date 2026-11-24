@@ -10,7 +10,7 @@ Torah text with te'amim, Targum Onkelos, Rashi, haftarot, the parashah
 calendar until 2046 — is bundled inside the APK. **No internet is ever
 needed, no ads, no tracking.**
 
-Ready-to-install APKs are published on [GitHub Releases](https://github.com/SnirR/shnayim-mikra-app/releases).
+Ready-to-install APKs are published on [GitHub Releases](https://github.com/SnirRadomsky/shnayim-mikra-app/releases).
 New releases install over the previous version without uninstalling.
 
 ## Features
