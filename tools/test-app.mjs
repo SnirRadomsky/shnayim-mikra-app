@@ -520,7 +520,54 @@ await page.click('#zenPlayBtn');
 await page.waitForTimeout(900);
 check('fullscreen readout goes live with auto-scroll', /^▶ \d+:\d\d/.test(await page.textContent('#zenTime')), await page.textContent('#zenTime'));
 await page.screenshot({ path: SHOTS + '/09-zen-time.png' });
-await page.click('#zenPlayBtn');
+
+console.log('== 9d. drag Pause to adjust speed in fullscreen ==');
+const zenPause = page.locator('#zenPlayBtn');
+const zenSpeed = page.locator('#zenSpeed');
+const zenSpeedRange = page.locator('#zenSpeedRange');
+const speedBeforeDrag = Number(await zenSpeedRange.inputValue());
+const fullscreenTouch = await page.context().newCDPSession(page);
+await fullscreenTouch.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+const pauseBounds = await zenPause.boundingBox();
+const pauseX = pauseBounds.x + pauseBounds.width / 2;
+const pauseY = pauseBounds.y + pauseBounds.height / 2;
+const touchPause = (type, dx = 0) => fullscreenTouch.send('Input.dispatchTouchEvent', {
+  type, touchPoints: type === 'touchEnd' ? [] : [{ x: pauseX + dx, y: pauseY }],
+});
+
+check('speed controls are hidden during ordinary fullscreen reading', !(await zenSpeed.isVisible()));
+await touchPause('touchStart');
+await touchPause('touchMove', 56);
+check('dragging right raises the shared speed and shows its value', await zenSpeed.isVisible()
+  && Number(await page.textContent('#zenSpeedVal')) === speedBeforeDrag + 8
+  && Number(await page.textContent('#speedVal')) === speedBeforeDrag + 8);
+await page.waitForFunction(top => document.getElementById('content').scrollTop > top + 5, await readerScrollTop());
+await touchPause('touchEnd');
+check('dragging and releasing Pause keeps auto-scroll running', await zenPause.getAttribute('aria-pressed') === 'true');
+await zenSpeed.waitFor({ state: 'hidden' });
+check('speed controls fade after the drag', !(await zenSpeed.isVisible()));
+
+await touchPause('touchStart');
+await touchPause('touchMove', -56);
+await touchPause('touchEnd');
+check('dragging left slows down and saves the new speed', Number(await zenSpeedRange.inputValue()) === speedBeforeDrag
+  && await page.evaluate(() => JSON.parse(localStorage.getItem('sm_settings')).speed) === speedBeforeDrag);
+
+await touchPause('touchStart');
+await page.waitForTimeout(500);
+await touchPause('touchEnd');
+await zenSpeedRange.press('ArrowRight');
+check('holding Pause opens an adjustable slider without pausing', await zenSpeed.isVisible()
+  && Number(await zenSpeedRange.inputValue()) === speedBeforeDrag + 1
+  && await zenPause.getAttribute('aria-pressed') === 'true');
+await zenSpeedRange.press('ArrowLeft');
+await zenSpeedRange.press('Escape');
+await touchPause('touchStart');
+await touchPause('touchEnd');
+check('a regular tap still pauses auto-scroll', await zenPause.getAttribute('aria-pressed') === 'false');
+await fullscreenTouch.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+await fullscreenTouch.detach();
+
 await page.click('#zenExit');
 await page.click('#btnMenu'); await page.click('#miSettings');
 await page.click('#setZenTime'); // back off

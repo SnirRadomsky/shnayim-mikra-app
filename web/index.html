@@ -73,7 +73,19 @@
   </div>
 
   <button id="zenExit" class="hidden" aria-label="יציאה ממסך מלא">✕</button>
-  <button id="zenPlayBtn" class="hidden zenplaybtn" aria-label="הפעל/עצור גלילה אוטומטית">▶</button>
+  <button id="zenPlayBtn" class="hidden zenplaybtn" aria-label="הפעל/עצור גלילה אוטומטית" data-i18n-aria="zenAutoScroll" aria-pressed="false">▶</button>
+  <span id="zenSpeedHint" data-i18n="zenSpeedHint" hidden></span>
+  <div id="zenSpeed" class="zenspeed" inert>
+    <div class="zenspeedvalue">
+      <label for="zenSpeedRange" data-i18n="scrollSpeed">מהירות גלילה</label>
+      <output id="zenSpeedVal" for="zenSpeedRange" aria-live="off">50</output>
+    </div>
+    <div class="zenspeedtrack" dir="ltr">
+      <span aria-hidden="true">−</span>
+      <input id="zenSpeedRange" type="range" min="1" max="100" value="50">
+      <span aria-hidden="true">+</span>
+    </div>
+  </div>
   <div id="zenTime" class="hidden zentime" aria-live="off">⏱ …</div>
   <div id="zenAliyahPop" class="zenaliyahpop" aria-live="off"></div>
   <div id="zenMinimap" class="hidden zenminimap">
